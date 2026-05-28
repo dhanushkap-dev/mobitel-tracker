@@ -30,7 +30,7 @@ def set_bg_hack(main_bg):
                 background-position: center;
                 background-attachment: fixed;
             }}
-            /* Dark overlay එක (Data පැහැදිලිව පේන්න) */
+            /* මුළු ඇප් එකටම වැටෙන අඳුරු ලේයර් එක (0.88 ඉඳන් 0.95 ට වැඩි කළා) */
             .stApp::before {{
                 content: "";
                 position: absolute;
@@ -38,8 +38,15 @@ def set_bg_hack(main_bg):
                 left: 0;
                 width: 100%;
                 height: 100%;
-                background-color: rgba(14, 17, 23, 0.88); 
+                background-color: rgba(14, 17, 23, 0.95); 
                 z-index: -1;
+            }}
+            /* Data තියෙන මැද කොටසට (Container) වෙනම අඳුරු Background එකක් දැමීම */
+            [data-testid="block-container"] {{
+                background-color: rgba(14, 17, 23, 0.85);
+                padding: 2rem;
+                border-radius: 15px;
+                box-shadow: 0px 0px 20px rgba(0, 0, 0, 0.5);
             }}
             /* Dashboard එකේ කොටු වලට ලස්සන Glassmorphism පෙනුමක් දෙන්න */
             [data-testid="stMetric"] {{
@@ -56,7 +63,7 @@ def set_bg_hack(main_bg):
     except FileNotFoundError:
         pass 
 
-set_bg_hack("bg.jpg")
+set_bg_hack("bg.jpg")    
 # ---------------------------------
 
 # Ensure Backup Directories Exist
