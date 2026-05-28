@@ -75,7 +75,6 @@ scopes = [
 ]
 
 try:
-    # Cloud එකේදී Secrets වලින් ගන්නවා, Local එකේදී ෆයිල් එකෙන් ගන්නවා
     if "gcp_json" in st.secrets:
         creds_dict = json.loads(st.secrets["gcp_json"])
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
@@ -290,7 +289,9 @@ def generate_table_export_pdf(df, title):
         pdf.cell(widths[5], 8, str(row.get("Returned Qty", "")), border=1, align="C", fill=fill_row)
         pdf.cell(widths[6], 8, f' {str(row.get("Remarks", ""))[:30]}', border=1, fill=fill_row)
         pdf.ln()
-    return pdf.output(dest='S').encode('latin1')
+    
+    # 🔴 මෙතන තමයි වෙනස් කළේ 🔴
+    return bytes(pdf.output())
 
 def generate_main_export_pdf(df, title):
     pdf = FPDF(orientation='L')
@@ -326,7 +327,9 @@ def generate_main_export_pdf(df, title):
         pdf.cell(widths[4], 8, str(row.get("Surplus Qty", "")), border=1, align="C", fill=fill_row)
         pdf.cell(widths[5], 8, f' {str(row.get("Status", ""))[:25]}', border=1, fill=fill_row)
         pdf.ln()
-    return pdf.output(dest='S').encode('latin1')
+        
+    # 🔴 මෙතනත් වෙනස් කළා 🔴
+    return bytes(pdf.output())
 
 # ==========================================
 # MAIN UI
