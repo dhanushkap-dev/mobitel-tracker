@@ -4,3 +4,4 @@ google-auth
 pandas
 fpdf2
 openpyxl
+google-api-python-client
