@@ -17,7 +17,7 @@ from fpdf import FPDF
 st.set_page_config(page_title="Mobitel Material Tracker", layout="wide", page_icon="📡")
 
 # 🔴 මෙතනට ඔයාගේ Google Drive Folder ID එක දාන්න 🔴
-DRIVE_FOLDER_ID = "https://drive.google.com/drive/folders/1DKmfT6qTyztlWdc2dygp1e_YEiPf9Dry"
+DRIVE_FOLDER_ID = "1DKmfT6qTyztlWdc2dygp1e_YEiPf9Dry"
 
 # --- BACKGROUND IMAGE FUNCTION ---
 def set_bg_hack(main_bg):
