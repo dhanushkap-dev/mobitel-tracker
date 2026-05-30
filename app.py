@@ -1,6 +1,8 @@
 import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
 import pandas as pd
 import io
 import os
@@ -13,6 +15,9 @@ from fpdf import FPDF
 # CONFIGURATION & SETUP
 # ==========================================
 st.set_page_config(page_title="Mobitel Material Tracker", layout="wide", page_icon="📡")
+
+# 🔴 මෙතනට ඔයාගේ Google Drive Folder ID එක දාන්න 🔴
+DRIVE_FOLDER_ID = "https://drive.google.com/drive/folders/1DKmfT6qTyztlWdc2dygp1e_YEiPf9Dry"
 
 # --- BACKGROUND IMAGE FUNCTION ---
 def set_bg_hack(main_bg):
@@ -30,7 +35,6 @@ def set_bg_hack(main_bg):
                 background-position: center;
                 background-attachment: fixed;
             }}
-            /* මුළු ඇප් එකටම වැටෙන අඳුරු ලේයර් එක (0.88 ඉඳන් 0.95 ට වැඩි කළා) */
             .stApp::before {{
                 content: "";
                 position: absolute;
@@ -41,14 +45,12 @@ def set_bg_hack(main_bg):
                 background-color: rgba(14, 17, 23, 0.95); 
                 z-index: -1;
             }}
-            /* Data තියෙන මැද කොටසට (Container) වෙනම අඳුරු Background එකක් දැමීම */
             [data-testid="block-container"] {{
                 background-color: rgba(14, 17, 23, 0.85);
                 padding: 2rem;
                 border-radius: 15px;
                 box-shadow: 0px 0px 20px rgba(0, 0, 0, 0.5);
             }}
-            /* Dashboard එකේ කොටු වලට ලස්සන Glassmorphism පෙනුමක් දෙන්න */
             [data-testid="stMetric"] {{
                 background-color: rgba(255, 255, 255, 0.05);
                 backdrop-filter: blur(10px);
@@ -63,18 +65,11 @@ def set_bg_hack(main_bg):
     except FileNotFoundError:
         pass 
 
-set_bg_hack("bg.jpg")    
+set_bg_hack("bg.jpg")
 # ---------------------------------
 
-# Ensure Backup Directories Exist
-BACKUP_DIR = "Delivery_Notes_Backup"
-EVIDENCE_DIR = "Evidence_Backup"
-for d in [BACKUP_DIR, EVIDENCE_DIR]:
-    if not os.path.exists(d):
-        os.makedirs(d)
-
 # ==========================================
-# GOOGLE SHEETS CONNECTION (UPDATED FOR CLOUD)
+# GOOGLE SHEETS & DRIVE CONNECTION 
 # ==========================================
 scopes = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -87,9 +82,15 @@ try:
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
     else:
         creds = Credentials.from_service_account_file("credentials.json", scopes=scopes)
+    
+    # Connect Sheets
     client = gspread.authorize(creds)
+    
+    # Connect Drive
+    drive_service = build('drive', 'v3', credentials=creds)
+    
 except Exception as e:
-    st.error(f"Error connecting to Google Sheets: {e}")
+    st.error(f"Error connecting to Google Services: {e}")
     st.stop()
 
 MAIN_SHEET_ID = "1pGS-qmg5MifIneWINIFJ9-TZVxQ7pfMe6SHRCUIcr54"
@@ -106,6 +107,16 @@ def get_sheets():
         st.stop()
 
 main_sheet, removal_sheet = get_sheets()
+
+# Google Drive Upload Function
+def upload_to_drive(file_bytes, file_name, mime_type):
+    file_metadata = {
+        'name': file_name,
+        'parents': [DRIVE_FOLDER_ID]
+    }
+    media = MediaIoBaseUpload(io.BytesIO(file_bytes), mimetype=mime_type, resumable=True)
+    file = drive_service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+    return file.get('id')
 
 # ==========================================
 # AUTHENTICATION SYSTEM
@@ -127,7 +138,6 @@ def save_users(users):
     with open(USERS_FILE, "w") as f:
         json.dump(users, f, indent=4)
 
-# Initialize Session State Variables
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "username" not in st.session_state:
@@ -135,7 +145,6 @@ if "username" not in st.session_state:
 if "role" not in st.session_state:
     st.session_state.role = ""
     
-# Variables for File Uploader Reset
 if "main_up_key" not in st.session_state:
     st.session_state.main_up_key = 0
 if "rem_up_key" not in st.session_state:
@@ -164,7 +173,6 @@ if not st.session_state.logged_in:
                 st.error("Invalid Username or Password!")
     st.stop()
 
-# Sidebar Logout
 st.sidebar.markdown(f"👤 **Logged in as:** {st.session_state.username.upper()} ({st.session_state.role.capitalize()})")
 if st.sidebar.button("Logout"):
     st.session_state.logged_in = False
@@ -173,7 +181,7 @@ if st.sidebar.button("Logout"):
     st.rerun()
 
 # ==========================================
-# DATA FETCHING (WITH CACHING FOR SPEED)
+# DATA FETCHING 
 # ==========================================
 @st.cache_data(ttl=60)
 def fetch_main_data():
@@ -262,7 +270,7 @@ def generate_delivery_note_pdf(dn_number, date, issued_by, issued_to, mapped_fro
     pdf.cell(95, 8, "________________________", align="C", ln=True)
     pdf.cell(95, 5, "Authorized Signature", align="C")
     pdf.cell(95, 5, "Receiver's Signature", align="C", ln=True)
-    return pdf
+    return bytes(pdf.output())
 
 def generate_table_export_pdf(df, title):
     pdf = FPDF(orientation='L')
@@ -296,8 +304,6 @@ def generate_table_export_pdf(df, title):
         pdf.cell(widths[5], 8, str(row.get("Returned Qty", "")), border=1, align="C", fill=fill_row)
         pdf.cell(widths[6], 8, f' {str(row.get("Remarks", ""))[:30]}', border=1, fill=fill_row)
         pdf.ln()
-    
-    # 🔴 මෙතන තමයි වෙනස් කළේ 🔴
     return bytes(pdf.output())
 
 def generate_main_export_pdf(df, title):
@@ -334,8 +340,6 @@ def generate_main_export_pdf(df, title):
         pdf.cell(widths[4], 8, str(row.get("Surplus Qty", "")), border=1, align="C", fill=fill_row)
         pdf.cell(widths[5], 8, f' {str(row.get("Status", ""))[:25]}', border=1, fill=fill_row)
         pdf.ln()
-        
-    # 🔴 මෙතනත් වෙනස් කළා 🔴
     return bytes(pdf.output())
 
 # ==========================================
@@ -344,21 +348,17 @@ def generate_main_export_pdf(df, title):
 st.title("📡 Mobitel Site Material Tracker")
 st.markdown("---")
 
-# Setup Tabs based on Roles
 if st.session_state.role == "admin":
     tab_dash, tab1, tab2, tab_settings = st.tabs(["📊 Dashboard", "📦 Main Materials", "♻️ Site Removal Materials", "⚙️ Settings"])
 else:
     tab_dash, tab1, tab2 = st.tabs(["📊 Dashboard", "📦 Main Materials", "♻️ Site Removal Materials"])
 
-# FETCH DATA FOR ENTIRE APP
 main_data = fetch_main_data()
 removal_data = fetch_removal_data()
 df_main = pd.DataFrame(main_data) if main_data else pd.DataFrame()
 df_removal = pd.DataFrame(removal_data) if removal_data else pd.DataFrame()
 
-# ==========================================
 # DASHBOARD TAB
-# ==========================================
 with tab_dash:
     st.subheader("Project Overview")
     if not df_main.empty:
@@ -378,9 +378,7 @@ with tab_dash:
     else:
         st.info("Not enough data to display dashboard.")
 
-# ==========================================
 # TAB 1: MAIN MATERIALS
-# ==========================================
 with tab1:
     st.subheader("Update Main and Surplus Materials")
     if not df_main.empty:
@@ -395,17 +393,13 @@ with tab1:
             evidence_files = st.file_uploader("📸 Upload Evidence Photos (Optional)", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True, key=f"main_evi_{st.session_state.main_up_key}")
             
             if st.button("Save Updates to Database", type="primary", key="save_main"):
-                with st.spinner("Saving data..."):
+                with st.spinner("Saving data & Uploading Photos to Google Drive..."):
                     try:
                         photo_count = 0
                         if evidence_files:
-                            site_folder = os.path.join(EVIDENCE_DIR, selected_site)
-                            os.makedirs(site_folder, exist_ok=True)
-                            
                             for file in evidence_files:
-                                file_path = os.path.join(site_folder, f"MAIN_{datetime.now().strftime('%Y%m%d%H%M%S')}_{file.name}")
-                                with open(file_path, "wb") as f:
-                                    f.write(file.getbuffer())
+                                file_name = f"MAIN_{selected_site}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{file.name}"
+                                upload_to_drive(file.getvalue(), file_name, file.type)
                                 photo_count += 1
 
                         df_main.update(edited_df)
@@ -414,7 +408,7 @@ with tab1:
                         st.cache_data.clear()
                         
                         st.session_state.main_up_key += 1
-                        msg = f"Data for {selected_site} successfully updated! ({photo_count} photos saved in '{selected_site}' folder)" if photo_count > 0 else f"Data for {selected_site} successfully updated!"
+                        msg = f"Data successfully updated! ({photo_count} photos uploaded to Google Drive)" if photo_count > 0 else "Data successfully updated!"
                         st.session_state.main_success_msg = msg
                         st.rerun() 
                         
@@ -441,13 +435,10 @@ with tab1:
         with ex_col_m2:
             pdf_main_data = generate_main_export_pdf(export_df, f"Main Materials - {status_filter} Data")
             st.download_button(label=f"📄 Download {status_filter} Data (PDF)", data=pdf_main_data, file_name=f"Main_Materials_{status_filter}.pdf", mime="application/pdf")
-
     else:
         st.info("No data available.")
 
-# ==========================================
 # TAB 2: REMOVAL MATERIALS
-# ==========================================
 with tab2:
     st.subheader("Update Site Removal Materials")
     if not df_removal.empty:
@@ -465,17 +456,13 @@ with tab2:
             evidence_rem_files = st.file_uploader("📸 Upload Removal Evidence Photos (Optional)", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True, key=f"rem_evi_{st.session_state.rem_up_key}")
             
             if st.button("Save Removal Updates", type="primary", key="save_rem"):
-                with st.spinner("Saving data..."):
+                with st.spinner("Saving data & Uploading Photos to Google Drive..."):
                     try:
                         photo_count = 0
                         if evidence_rem_files:
-                            site_folder = os.path.join(EVIDENCE_DIR, selected_site_rem)
-                            os.makedirs(site_folder, exist_ok=True) 
-                            
                             for file in evidence_rem_files:
-                                file_path = os.path.join(site_folder, f"REM_{datetime.now().strftime('%Y%m%d%H%M%S')}_{file.name}")
-                                with open(file_path, "wb") as f:
-                                    f.write(file.getbuffer())
+                                file_name = f"REM_{selected_site_rem}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{file.name}"
+                                upload_to_drive(file.getvalue(), file_name, file.type)
                                 photo_count += 1
                             
                         save_df = edited_df_rem.drop(columns=["Select for Delivery Note"])
@@ -485,7 +472,7 @@ with tab2:
                         st.cache_data.clear()
                         
                         st.session_state.rem_up_key += 1
-                        msg = f"Removal data successfully updated! ({photo_count} photos saved in '{selected_site_rem}' folder)" if photo_count > 0 else "Removal data successfully updated in Google Sheets!"
+                        msg = f"Removal data successfully updated! ({photo_count} photos uploaded to Google Drive)" if photo_count > 0 else "Removal data successfully updated!"
                         st.session_state.rem_success_msg = msg
                         st.rerun() 
                         
@@ -512,24 +499,25 @@ with tab2:
                         rec_nic = st.text_input("NIC")
                         rec_mobile = st.text_input("Mobile")
                         rec_vehicle = st.text_input("Vehicle Number")
-                    generate_btn = st.form_submit_button("Generate Delivery Note")
+                    generate_btn = st.form_submit_button("Generate & Upload Delivery Note")
                     
                 if generate_btn:
-                    pdf = generate_delivery_note_pdf(
-                        dn_number, datetime.now().strftime("%Y/%m/%d"), issued_by, issued_to, 
-                        selected_site_rem, selected_items_df, rec_company, rec_name, rec_nic, rec_mobile, rec_vehicle
-                    )
-                    file_name = f"DeliveryNote_{dn_number}.pdf"
-                    file_path = os.path.join(BACKUP_DIR, file_name)
-                    pdf.output(file_path)
-                    st.session_state['dn_ready'] = True
-                    st.session_state['dn_path'] = file_path
-                    st.session_state['dn_name'] = file_name
-                    st.success("Delivery Note Generated!")
-                
-                if st.session_state.get('dn_ready') and os.path.exists(st.session_state.get('dn_path', '')):
-                    with open(st.session_state['dn_path'], "rb") as pdf_file:
-                        st.download_button("⬇️ Download Delivery Note", data=pdf_file, file_name=st.session_state['dn_name'], mime="application/pdf", type="primary")
+                    with st.spinner("Generating PDF and uploading to Google Drive..."):
+                        try:
+                            pdf_bytes = generate_delivery_note_pdf(
+                                dn_number, datetime.now().strftime("%Y/%m/%d"), issued_by, issued_to, 
+                                selected_site_rem, selected_items_df, rec_company, rec_name, rec_nic, rec_mobile, rec_vehicle
+                            )
+                            file_name = f"DeliveryNote_{dn_number}.pdf"
+                            
+                            # Upload to Drive
+                            upload_to_drive(pdf_bytes, file_name, 'application/pdf')
+                            
+                            # Give a download option as well
+                            st.success(f"Delivery Note '{file_name}' Generated and Uploaded to Google Drive!")
+                            st.download_button("⬇️ Download Delivery Note to PC", data=pdf_bytes, file_name=file_name, mime="application/pdf", type="primary")
+                        except Exception as e:
+                            st.error(f"Error generating/uploading PDF: {e}")
             else:
                 st.warning("Select items using checkboxes above to generate Delivery Note.")
                 
@@ -576,7 +564,6 @@ if st.session_state.role == "admin":
         
         col_add, col_edit = st.columns(2)
         
-        # 1. Add New User Section
         with col_add:
             st.markdown("### ➕ Add New User")
             with st.form("add_user_form"):
@@ -596,7 +583,6 @@ if st.session_state.role == "admin":
                         st.success(f"User '{new_user}' added successfully!")
                         st.rerun()
         
-        # 2. Edit Existing User Section
         with col_edit:
             st.markdown("### ✏️ Edit Existing User")
             with st.form("edit_user_form"):
