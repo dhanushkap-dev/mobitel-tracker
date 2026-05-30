@@ -379,8 +379,6 @@ with tab1:
             disabled_cols = ["ERP Site ID", "Mat Req Ref", "Site ID", "Site Name", "HQ/TaskID", "Generic Name", "Item Description", "UOM", "Required Qty", "Materials From", "Request Type", "IR/MO", "Item Code_INV", "SE", "Subcon"]
             edited_df = st.data_editor(df_filtered, disabled=disabled_cols, use_container_width=True, hide_index=True, key="main_data_editor")
             
-            # Note about Evidence Photos
-            st.info("📸 If you have evidence photos, please upload them directly to your shared Google Drive folder and copy the link to the 'Remarks' column.")
             
             if st.button("Save Updates to Database", type="primary", key="save_main"):
                 with st.spinner("Saving data..."):
@@ -435,8 +433,7 @@ with tab2:
             st.markdown("**Check the boxes to select items for Handover / Delivery Note:**")
             edited_df_rem = st.data_editor(df_filtered_rem, disabled=disabled_cols_rem, use_container_width=True, hide_index=True, key="rem_data_editor")
             
-            # Note about Evidence Photos
-            st.info("📸 If you have removal evidence photos, please upload them directly to your shared Google Drive folder and copy the link to the 'Remarks' column.")
+           
             
             if st.button("Save Removal Updates", type="primary", key="save_rem"):
                 with st.spinner("Saving data..."):
