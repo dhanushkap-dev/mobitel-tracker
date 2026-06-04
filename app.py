@@ -418,34 +418,38 @@ df_removal = pd.DataFrame(removal_data) if removal_data else pd.DataFrame()
 
 # DASHBOARD TAB
 with tab_dash:
-    # --- Onnexta Logo Animation ---
-    logo_base64 = get_base64_image("logo.png")
-    if logo_base64:
-        st.markdown(
-            f"""
-            <style>
-            @keyframes float {{
-                0% {{ transform: translateY(0px); }}
-                50% {{ transform: translateY(-15px); }}
-                100% {{ transform: translateY(0px); }}
-            }}
-            .animated-logo {{
-                display: block;
-                margin-left: auto;
-                margin-right: auto;
-                width: 250px;
-                animation: float 3s ease-in-out infinite;
-                margin-bottom: 20px;
-                margin-top: 10px;
-            }}
-            </style>
-            <img src="data:image/png;base64,{logo_base64}" class="animated-logo">
-            """,
-            unsafe_allow_html=True
-        )
-    # ------------------------------
+    # --- Dashboard Header: Title and 3D Logo ---
+    col_dash_title, col_dash_logo = st.columns([4, 1])
+    
+    with col_dash_title:
+        st.subheader("Project Overview")
+        
+    with col_dash_logo:
+        logo_base64 = get_base64_image("logo.png")
+        if logo_base64:
+            st.markdown(
+                f"""
+                <style>
+                @keyframes spin3D {{
+                    from {{ transform: perspective(1000px) rotateY(0deg); }}
+                    to {{ transform: perspective(1000px) rotateY(360deg); }}
+                }}
+                .animated-logo-3d {{
+                    display: block;
+                    margin-left: auto;
+                    margin-right: 0;
+                    width: 140px;
+                    animation: spin3D 6s linear infinite;
+                    transform-style: preserve-3d;
+                    margin-top: -10px;
+                }}
+                </style>
+                <img src="data:image/png;base64,{logo_base64}" class="animated-logo-3d">
+                """,
+                unsafe_allow_html=True
+            )
+    # ------------------------------------------
 
-    st.subheader("Project Overview")
     if not df_main.empty:
         total_sites = df_main['Site ID'].nunique()
         total_items = len(df_main)
