@@ -328,15 +328,28 @@ def generate_table_export_pdf(df, title):
             text = str(row.get(col, ""))
             if text == "nan" or text == "None": text = ""
             
-            text_width = pdf.get_string_width(text)
             safe_width = widths[i] - 2 if widths[i] > 2 else 1
-            lines = math.ceil(text_width / safe_width)
             
-            newlines = text.count('\n') + 1
-            lines = max(lines, newlines)
+            # --- අලුත් කරපු නිවැරදි පේළි ගණනය කිරීම (Accurate Word-Wrapping Logic) ---
+            lines = 0
+            for p in text.split('\n'):
+                words = p.split(' ')
+                line_w = 0
+                for w in words:
+                    w_w = pdf.get_string_width(w + " ")
+                    if line_w + w_w > safe_width and line_w > 0:
+                        lines += 1
+                        line_w = w_w
+                    else:
+                        line_w += w_w
+                lines += 1
+                
+            # දිග වචන (Spaces නැති ඒවා) සඳහා ආරක්ෂාව
+            math_lines = math.ceil(pdf.get_string_width(text) / safe_width)
+            final_lines = max(lines, math_lines)
             
-            if lines > max_lines:
-                max_lines = lines
+            if final_lines > max_lines:
+                max_lines = final_lines
                 
         row_height = max_lines * line_height
         
@@ -454,7 +467,6 @@ with tab1:
                 st.success(st.session_state.main_success_msg)
                 del st.session_state.main_success_msg
         
-        # --- අලුත් කරපු Main Materials Export කොටස ---
         st.markdown("---")
         st.subheader("📥 Select & Export Main Materials Data")
         st.write("Filter by Site and Status, then select exactly which columns to export:")
@@ -466,7 +478,6 @@ with tab1:
             
         export_df = df_main.copy()
         
-        # ෆිල්ටර් දෙකම ඇප්ලයි කිරීම
         if main_export_site_filter != "All Sites":
             export_df = export_df[export_df['Site ID'] == main_export_site_filter]
         if status_filter != "All":
@@ -493,11 +504,9 @@ with tab1:
             ex_col_m1, ex_col_m2 = st.columns(2)
             with ex_col_m1:
                 excel_data = to_excel(selected_export_data_main)
-                # Excel file name සෑදීම
                 ex_name = f"Main_Materials_{main_export_site_filter}_{status_filter}.xlsx" if main_export_site_filter != "All Sites" else f"Main_Materials_{status_filter}.xlsx"
                 st.download_button(label="💾 Download Selected Data (Excel)", data=excel_data, file_name=ex_name, mime="application/vnd.ms-excel")
             with ex_col_m2:
-                # PDF file name සෑදීම
                 pdf_name = f"Main_Materials_{main_export_site_filter}_{status_filter}.pdf" if main_export_site_filter != "All Sites" else f"Main_Materials_{status_filter}.pdf"
                 pdf_title = f"Main Materials - {status_filter} Data" if main_export_site_filter == "All Sites" else f"Main Materials - {status_filter} Data ({main_export_site_filter})"
                 
