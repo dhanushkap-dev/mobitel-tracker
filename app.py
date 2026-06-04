@@ -235,10 +235,8 @@ def generate_delivery_note_pdf(dn_number, date, issued_by, issued_to, mapped_fro
         else: pdf.set_fill_color(255, 255, 255)
         pdf.cell(widths[0], 8, f"{idx:02d}", border=1, align="C", fill=fill_row)
         
-        # මෙතන තමයි වෙනස් වුණේ. Removed Item Description එක හිස් නම් Removed Item එක ගන්නවා
         item_name = str(r.get("Generic Name", r.get("Removed Item", "")))[:20]
         desc = str(r.get("Item Description", r.get("Removed Item Description", "")))[:40]
-        
         serial = str(r.get("SN", "N/A"))
         qty = str(r.get("Handed Over Qty", r.get("Removal Qty", "")))
         remarks = str(r.get("Remarks", ""))[:15]
@@ -286,13 +284,16 @@ def generate_table_export_pdf(df, title):
     
     cols = list(df.columns)
     
+    # Main Materials සහ Removal Materials දෙකටම ගැලපෙන පළලවල් (Widths)
     width_map = {
-        "Index": 10, "Site ID": 20, "Site Name": 22, "Removed Item": 30, 
+        "Index": 10, "Site ID": 20, "Site Name": 25, "Removed Item": 30, 
         "Removed Item Description": 55, "UOM": 12, "Removal Qty": 22, 
         "SN": 30, "Return Status": 22, "Returned Qty": 22, "Remarks": 45,
         "Status": 20, "Required Qty": 20, "Materials From": 25,
         "Request Type": 25, "IR/MO": 25, "Item Code_INV": 25,
-        "SE": 20, "Subcon": 20
+        "SE": 20, "Subcon": 20, "Generic Name": 35, "Item Description": 55,
+        "ERP Site ID": 30, "Mat Req Ref": 30, "HQ/TaskID": 40,
+        "Handed Over Qty": 22
     }
     
     widths = [width_map.get(col, 25) for col in cols]
@@ -425,7 +426,6 @@ with tab1:
             
             disabled_cols = ["Index", "ERP Site ID", "Mat Req Ref", "Site ID", "Site Name", "HQ/TaskID", "Generic Name", "Item Description", "UOM", "Required Qty", "Materials From", "Request Type", "IR/MO", "Item Code_INV", "SE", "Subcon"]
             
-            # Evidence Photo Link Column සැකසුම ඉවත් කර ඇත (සාමාන්‍ය තීරුවක් ලෙස ක්‍රියා කරයි)
             edited_df = st.data_editor(
                 df_filtered, 
                 disabled=disabled_cols, 
@@ -454,24 +454,42 @@ with tab1:
                 st.success(st.session_state.main_success_msg)
                 del st.session_state.main_success_msg
         
+        # --- අලුත් කරපු Main Materials Export කොටස ---
         st.markdown("---")
-        st.subheader("📥 Export Data")
-        col1, _ = st.columns(2)
-        with col1:
-            status_filter = st.selectbox("Filter by Status:", ["All", "Installed", "Surplus", "HO"])
+        st.subheader("📥 Select & Export Main Materials Data")
+        st.write("Filter by Status and select exactly which columns to export:")
+        
+        col_export_m1, col_export_m2 = st.columns(2)
+        with col_export_m1:
+            status_filter = st.selectbox("Filter by Status:", ["All", "Installed", "Surplus", "HO"], key="main_export_status")
             
         export_df = df_main.copy() if status_filter == "All" else df_main[df_main['Status'] == status_filter].copy()
         export_df.insert(0, "Index", range(1, len(export_df) + 1))
         
-        st.dataframe(export_df, use_container_width=True)
+        all_cols_main = export_df.columns.tolist()
+        # මූලිකව තෝරලා තියෙන කොලම් ටික (ඔයාට ඕනෙම ඒවා)
+        default_cols_main = ["Index", "Site ID", "Site Name", "Generic Name", "Item Description", "UOM", "Required Qty", "Status", "Remarks"]
+        default_cols_main = [c for c in default_cols_main if c in all_cols_main]
         
-        ex_col_m1, ex_col_m2 = st.columns(2)
-        with ex_col_m1:
-            excel_data = to_excel(export_df)
-            st.download_button(label=f"💾 Download {status_filter} Data (Excel)", data=excel_data, file_name=f"Main_Materials_{status_filter}.xlsx", mime="application/vnd.ms-excel")
-        with ex_col_m2:
-            pdf_main_data = generate_table_export_pdf(export_df, f"Main Materials - {status_filter} Data")
-            st.download_button(label=f"📄 Download {status_filter} Data (PDF)", data=pdf_main_data, file_name=f"Main_Materials_{status_filter}.pdf", mime="application/pdf")
+        with col_export_m2:
+            selected_cols_main = st.multiselect("Select columns for Export Table:", all_cols_main, default=default_cols_main, key="main_col_select")
+            
+        if not selected_cols_main:
+            st.warning("Please select at least one column to export.")
+        else:
+            df_export_display_main = export_df[selected_cols_main].copy()
+            df_export_display_main.insert(0, "Select for Export", True)
+            
+            edited_export_main = st.data_editor(df_export_display_main, use_container_width=True, hide_index=True, key="main_export_editor")
+            selected_export_data_main = edited_export_main[edited_export_main["Select for Export"] == True].drop(columns=["Select for Export"])
+            
+            ex_col_m1, ex_col_m2 = st.columns(2)
+            with ex_col_m1:
+                excel_data = to_excel(selected_export_data_main)
+                st.download_button(label=f"💾 Download {status_filter} Data (Excel)", data=excel_data, file_name=f"Main_Materials_{status_filter}.xlsx", mime="application/vnd.ms-excel")
+            with ex_col_m2:
+                pdf_main_data = generate_table_export_pdf(selected_export_data_main, f"Main Materials - {status_filter} Data")
+                st.download_button(label=f"📄 Download {status_filter} Data (PDF)", data=pdf_main_data, file_name=f"Main_Materials_{status_filter}.pdf", mime="application/pdf")
     else:
         st.info("No data available.")
 
@@ -491,7 +509,6 @@ with tab2:
             
             st.markdown("**Check the boxes to select items for Handover / Delivery Note:**")
             
-            # Evidence Photo Link Column සැකසුම ඉවත් කර ඇත (සාමාන්‍ය තීරුවක් ලෙස ක්‍රියා කරයි)
             edited_df_rem = st.data_editor(
                 df_filtered_rem, 
                 disabled=disabled_cols_rem, 
