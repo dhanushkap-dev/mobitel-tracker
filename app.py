@@ -271,27 +271,34 @@ def generate_table_export_pdf(df, title):
     pdf.set_text_color(100, 100, 100)
     pdf.cell(0, 8, f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True, align="C")
     pdf.ln(5)
-    cols = ["Site ID", "Removed Item Description", "UOM", "Removal Qty", "Return Status", "Ret. Qty", "Remarks"]
-    widths = [25, 100, 15, 25, 25, 20, 60]
+    
+    # මෙතන තමයි වෙනස් වුණේ: SN කොලම් එක ඇතුළත් කරලා, පළල (Widths) ගැලපුවා
+    cols = ["Site ID", "Removed Item Description", "SN", "UOM", "Rem Qty", "Ret Status", "Ret Qty", "Remarks"]
+    widths = [22, 75, 30, 12, 18, 25, 18, 70]
+    
     pdf.set_font("Arial", "B", 9)
     pdf.set_fill_color(44, 62, 80)
     pdf.set_text_color(255, 255, 255)
     for i in range(len(cols)):
         pdf.cell(widths[i], 8, cols[i], border=1, align="C", fill=True)
     pdf.ln()
+    
     pdf.set_font("Arial", "", 8)
     pdf.set_text_color(0, 0, 0)
     for idx, row in df.iterrows():
         fill_row = True if idx % 2 == 0 else False
         if fill_row: pdf.set_fill_color(248, 248, 248)
         else: pdf.set_fill_color(255, 255, 255)
-        pdf.cell(widths[0], 8, str(row.get("Site ID", ""))[:15], border=1, fill=fill_row)
-        pdf.cell(widths[1], 8, f' {str(row.get("Removed Item Description", ""))[:55]}', border=1, fill=fill_row)
-        pdf.cell(widths[2], 8, str(row.get("UOM", ""))[:8], border=1, align="C", fill=fill_row)
-        pdf.cell(widths[3], 8, str(row.get("Removal Qty", "")), border=1, align="C", fill=fill_row)
-        pdf.cell(widths[4], 8, f' {str(row.get("Return Status", ""))[:12]}', border=1, fill=fill_row)
-        pdf.cell(widths[5], 8, str(row.get("Returned Qty", "")), border=1, align="C", fill=fill_row)
-        pdf.cell(widths[6], 8, f' {str(row.get("Remarks", ""))[:30]}', border=1, fill=fill_row)
+        
+        pdf.cell(widths[0], 8, str(row.get("Site ID", ""))[:12], border=1, fill=fill_row)
+        pdf.cell(widths[1], 8, f' {str(row.get("Removed Item Description", ""))[:42]}', border=1, fill=fill_row)
+        # අලුතින් එකතු කරපු SN එක
+        pdf.cell(widths[2], 8, str(row.get("SN", ""))[:18], border=1, align="C", fill=fill_row) 
+        pdf.cell(widths[3], 8, str(row.get("UOM", ""))[:7], border=1, align="C", fill=fill_row)
+        pdf.cell(widths[4], 8, str(row.get("Removal Qty", "")), border=1, align="C", fill=fill_row)
+        pdf.cell(widths[5], 8, f' {str(row.get("Return Status", ""))[:12]}', border=1, fill=fill_row)
+        pdf.cell(widths[6], 8, str(row.get("Returned Qty", "")), border=1, align="C", fill=fill_row)
+        pdf.cell(widths[7], 8, f' {str(row.get("Remarks", ""))[:38]}', border=1, fill=fill_row)
         pdf.ln()
     return bytes(pdf.output())
 
