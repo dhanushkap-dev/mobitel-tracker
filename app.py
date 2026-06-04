@@ -279,7 +279,11 @@ def generate_table_export_pdf(df, title):
     width_map = {
         "Site ID": 22, "Site Name": 25, "Removed Item": 35, 
         "Removed Item Description": 65, "UOM": 12, "Removal Qty": 18, 
-        "SN": 35, "Return Status": 22, "Returned Qty": 18, "Remarks": 55
+        "SN": 35, "Return Status": 22, "Returned Qty": 18, "Remarks": 55,
+        # පහත ඒවා Main Materials සඳහා අවශ්‍ය වේ
+        "Status": 20, "Required Qty": 18, "Materials From": 25,
+        "Request Type": 25, "IR/MO": 25, "Item Code_INV": 25,
+        "SE": 20, "Subcon": 20
     }
     
     # ඔයා තෝරන කොලම් වලට අදාළව පමණක් පළල ලබා ගැනීම
@@ -404,8 +408,18 @@ with tab1:
         if selected_site != "-- Select a Site --":
             df_filtered = df_main[df_main['Site ID'] == selected_site]
             disabled_cols = ["ERP Site ID", "Mat Req Ref", "Site ID", "Site Name", "HQ/TaskID", "Generic Name", "Item Description", "UOM", "Required Qty", "Materials From", "Request Type", "IR/MO", "Item Code_INV", "SE", "Subcon"]
-            edited_df = st.data_editor(df_filtered, disabled=disabled_cols, use_container_width=True, hide_index=True, key="main_data_editor")
             
+            # Evidence Photo Link Column එකතු කිරීම
+            edited_df = st.data_editor(
+                df_filtered, 
+                disabled=disabled_cols, 
+                use_container_width=True, 
+                hide_index=True, 
+                key="main_data_editor",
+                column_config={
+                    "Remarks": st.column_config.LinkColumn("Remarks", display_text="Evidence Photo")
+                }
+            )
             
             if st.button("Save Updates to Database", type="primary", key="save_main"):
                 with st.spinner("Saving data..."):
@@ -440,7 +454,8 @@ with tab1:
             excel_data = to_excel(export_df)
             st.download_button(label=f"💾 Download {status_filter} Data (Excel)", data=excel_data, file_name=f"Main_Materials_{status_filter}.xlsx", mime="application/vnd.ms-excel")
         with ex_col_m2:
-            pdf_main_data = generate_main_export_pdf(export_df, f"Main Materials - {status_filter} Data")
+            # මෙතන generate_main_export_pdf වෙනුවට අලුත් generate_table_export_pdf පාවිච්චි කර ඇත
+            pdf_main_data = generate_table_export_pdf(export_df, f"Main Materials - {status_filter} Data")
             st.download_button(label=f"📄 Download {status_filter} Data (PDF)", data=pdf_main_data, file_name=f"Main_Materials_{status_filter}.pdf", mime="application/pdf")
     else:
         st.info("No data available.")
@@ -458,9 +473,18 @@ with tab2:
             disabled_cols_rem = ["Site ID", "Site Name", "Removed Item Description", "UOM"]
             
             st.markdown("**Check the boxes to select items for Handover / Delivery Note:**")
-            edited_df_rem = st.data_editor(df_filtered_rem, disabled=disabled_cols_rem, use_container_width=True, hide_index=True, key="rem_data_editor")
             
-           
+            # Evidence Photo Link Column එකතු කිරීම
+            edited_df_rem = st.data_editor(
+                df_filtered_rem, 
+                disabled=disabled_cols_rem, 
+                use_container_width=True, 
+                hide_index=True, 
+                key="rem_data_editor",
+                column_config={
+                    "Remarks": st.column_config.LinkColumn("Remarks", display_text="Evidence Photo")
+                }
+            )
             
             if st.button("Save Removal Updates", type="primary", key="save_rem"):
                 with st.spinner("Saving data..."):
@@ -515,8 +539,7 @@ with tab2:
             else:
                 st.warning("Select items using checkboxes above to generate Delivery Note.")
                 
-        st.markdown("---")
-        st.subheader("📥 Select & Export Removal Data")
+        # මෙතන තිබුණු Duplicate කෑලි අයින් කරලා ලස්සනට හැදුවා
         st.markdown("---")
         st.subheader("📥 Select & Export Removal Data")
         st.write("Filter by Site and select exactly which columns to export:")
