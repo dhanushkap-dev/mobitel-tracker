@@ -19,6 +19,14 @@ st.set_page_config(page_title="Mobitel Material Tracker", layout="wide", page_ic
 def get_sl_time():
     return datetime.utcnow() + timedelta(hours=5, minutes=30)
 
+# පින්තූර Base64 වලට හැරවීමේ ශ්‍රිතය (Animation සඳහා)
+def get_base64_image(image_path):
+    try:
+        with open(image_path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode()
+    except FileNotFoundError:
+        return ""
+
 # --- BACKGROUND IMAGE FUNCTION ---
 def set_bg_hack(main_bg):
     main_bg_ext = "jpg"
@@ -68,7 +76,7 @@ def set_bg_hack(main_bg):
 set_bg_hack("bg.jpg")
 # ---------------------------------
 
-# Ensure Backup Directories Exist (For local execution)
+# Ensure Backup Directories Exist
 BACKUP_DIR = "Delivery_Notes_Backup"
 EVIDENCE_DIR = "Evidence_Backup"
 for d in [BACKUP_DIR, EVIDENCE_DIR]:
@@ -90,7 +98,6 @@ try:
     else:
         creds = Credentials.from_service_account_file("credentials.json", scopes=scopes)
     
-    # Connect Sheets
     client = gspread.authorize(creds)
     
 except Exception as e:
@@ -284,7 +291,6 @@ def generate_table_export_pdf(df, title):
     
     cols = list(df.columns)
     
-    # SN එකට 45 ක් දීලා තියෙනවා එක පේළියට එන්න. අනිත් ඒවත් ගැලපුවා.
     width_map = {
         "Index": 10, "Site ID": 18, "Site Name": 25, "Removed Item": 30, 
         "Removed Item Description": 50, "UOM": 12, "Removal Qty": 20, 
@@ -298,11 +304,9 @@ def generate_table_export_pdf(df, title):
     
     widths = [width_map.get(col, 25) for col in cols]
     
-    # --- අලුත් කරපු Dynamic Scaling සහ Centering ---
     total_table_width = sum(widths)
-    max_page_width = 285 # A4 කොළේ පළල 297mm. දෙපැත්තෙන් 6mm ගානේ ඉතුරු කරන්න 285mm.
+    max_page_width = 285 
     
-    # ටේබල් එක කොළේට වඩා ලොකු නම්, ඔටෝම Scale කරලා පොඩි කරනවා
     if total_table_width > max_page_width:
         scale_factor = max_page_width / total_table_width
         widths = [w * scale_factor for w in widths]
@@ -315,7 +319,6 @@ def generate_table_export_pdf(df, title):
         
     pdf.set_left_margin(left_margin)
     pdf.set_x(left_margin)
-    # -----------------------------------------------
     
     pdf.set_font("Arial", "B", 9)
     pdf.set_fill_color(44, 62, 80)
@@ -415,6 +418,33 @@ df_removal = pd.DataFrame(removal_data) if removal_data else pd.DataFrame()
 
 # DASHBOARD TAB
 with tab_dash:
+    # --- Onnexta Logo Animation ---
+    logo_base64 = get_base64_image("logo.png")
+    if logo_base64:
+        st.markdown(
+            f"""
+            <style>
+            @keyframes float {{
+                0% {{ transform: translateY(0px); }}
+                50% {{ transform: translateY(-15px); }}
+                100% {{ transform: translateY(0px); }}
+            }}
+            .animated-logo {{
+                display: block;
+                margin-left: auto;
+                margin-right: auto;
+                width: 250px;
+                animation: float 3s ease-in-out infinite;
+                margin-bottom: 20px;
+                margin-top: 10px;
+            }}
+            </style>
+            <img src="data:image/png;base64,{logo_base64}" class="animated-logo">
+            """,
+            unsafe_allow_html=True
+        )
+    # ------------------------------
+
     st.subheader("Project Overview")
     if not df_main.empty:
         total_sites = df_main['Site ID'].nunique()
