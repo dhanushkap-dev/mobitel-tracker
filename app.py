@@ -8,6 +8,7 @@ import json
 import base64
 from datetime import datetime
 from fpdf import FPDF
+import math
 
 # ==========================================
 # CONFIGURATION & SETUP
@@ -272,70 +273,89 @@ def generate_table_export_pdf(df, title):
     pdf.cell(0, 8, f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True, align="C")
     pdf.ln(5)
     
-    # මෙතන තමයි වෙනස් වුණේ: SN කොලම් එක ඇතුළත් කරලා, පළල (Widths) ගැලපුවා
-    cols = ["Site ID", "Removed Item Description", "SN", "UOM", "Rem Qty", "Ret Status", "Ret Qty", "Remarks"]
-    widths = [22, 75, 30, 12, 18, 25, 18, 70]
+    cols = list(df.columns)
+    
+    # එක් එක් කොලම් එකට අදාළව පළල (Width) කලින්ම සකසා තිබීම
+    width_map = {
+        "Site ID": 22, "Site Name": 25, "Removed Item": 35, 
+        "Removed Item Description": 65, "UOM": 12, "Removal Qty": 18, 
+        "SN": 35, "Return Status": 22, "Returned Qty": 18, "Remarks": 55
+    }
+    
+    # ඔයා තෝරන කොලම් වලට අදාළව පමණක් පළල ලබා ගැනීම
+    widths = [width_map.get(col, 25) for col in cols]
     
     pdf.set_font("Arial", "B", 9)
     pdf.set_fill_color(44, 62, 80)
     pdf.set_text_color(255, 255, 255)
+    
+    # Table Header දැමීම
     for i in range(len(cols)):
-        pdf.cell(widths[i], 8, cols[i], border=1, align="C", fill=True)
+        pdf.cell(widths[i], 8, str(cols[i]), border=1, align="C", fill=True)
     pdf.ln()
     
     pdf.set_font("Arial", "", 8)
     pdf.set_text_color(0, 0, 0)
+    line_height = 5
+    
+    # Table Rows දැමීම (Text Wrap වන ආකාරයට)
     for idx, row in df.iterrows():
         fill_row = True if idx % 2 == 0 else False
-        if fill_row: pdf.set_fill_color(248, 248, 248)
-        else: pdf.set_fill_color(255, 255, 255)
         
-        pdf.cell(widths[0], 8, str(row.get("Site ID", ""))[:12], border=1, fill=fill_row)
-        pdf.cell(widths[1], 8, f' {str(row.get("Removed Item Description", ""))[:42]}', border=1, fill=fill_row)
-        # අලුතින් එකතු කරපු SN එක
-        pdf.cell(widths[2], 8, str(row.get("SN", ""))[:18], border=1, align="C", fill=fill_row) 
-        pdf.cell(widths[3], 8, str(row.get("UOM", ""))[:7], border=1, align="C", fill=fill_row)
-        pdf.cell(widths[4], 8, str(row.get("Removal Qty", "")), border=1, align="C", fill=fill_row)
-        pdf.cell(widths[5], 8, f' {str(row.get("Return Status", ""))[:12]}', border=1, fill=fill_row)
-        pdf.cell(widths[6], 8, str(row.get("Returned Qty", "")), border=1, align="C", fill=fill_row)
-        pdf.cell(widths[7], 8, f' {str(row.get("Remarks", ""))[:38]}', border=1, fill=fill_row)
-        pdf.ln()
-    return bytes(pdf.output())
+        # 1. මේ පේළියේ අකුරු කොච්චර දිගදැයි බලා උපරිම උස (Max Height) තීරණය කිරීම
+        max_lines = 1
+        for i, col in enumerate(cols):
+            text = str(row.get(col, ""))
+            if text == "nan" or text == "None": text = ""
+            
+            text_width = pdf.get_string_width(text)
+            safe_width = widths[i] - 2 if widths[i] > 2 else 1
+            lines = math.ceil(text_width / safe_width)
+            
+            newlines = text.count('\n') + 1
+            lines = max(lines, newlines)
+            
+            if lines > max_lines:
+                max_lines = lines
+                
+        row_height = max_lines * line_height
+        
+        # 2. පිටුව ඉවරවීගෙන එයි නම් ඊළඟ පිටුවට යාම
+        if pdf.get_y() + row_height > 190:
+            pdf.add_page()
+            pdf.set_font("Arial", "B", 9)
+            pdf.set_fill_color(44, 62, 80)
+            pdf.set_text_color(255, 255, 255)
+            for i in range(len(cols)):
+                pdf.cell(widths[i], 8, str(cols[i]), border=1, align="C", fill=True)
+            pdf.ln()
+            pdf.set_font("Arial", "", 8)
+            pdf.set_text_color(0, 0, 0)
 
-def generate_main_export_pdf(df, title):
-    pdf = FPDF(orientation='L')
-    pdf.add_page()
-    pdf.set_font("Arial", "B", 16)
-    pdf.set_text_color(44, 62, 80)
-    pdf.cell(0, 10, title, ln=True, align="C")
-    pdf.set_font("Arial", "I", 10)
-    pdf.set_text_color(100, 100, 100)
-    pdf.cell(0, 8, f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True, align="C")
-    pdf.ln(5)
-    
-    cols = ["Site ID", "Generic Name", "Required Qty", "Installed Qty", "Surplus Qty", "Status"]
-    widths = [25, 120, 25, 25, 25, 55] 
-    
-    pdf.set_font("Arial", "B", 9)
-    pdf.set_fill_color(44, 62, 80)
-    pdf.set_text_color(255, 255, 255)
-    for i in range(len(cols)):
-        pdf.cell(widths[i], 8, cols[i], border=1, align="C", fill=True)
-    pdf.ln()
-    
-    pdf.set_font("Arial", "", 8)
-    pdf.set_text_color(0, 0, 0)
-    for idx, row in df.iterrows():
-        fill_row = True if idx % 2 == 0 else False
-        if fill_row: pdf.set_fill_color(248, 248, 248)
-        else: pdf.set_fill_color(255, 255, 255)
-        pdf.cell(widths[0], 8, str(row.get("Site ID", ""))[:15], border=1, fill=fill_row)
-        pdf.cell(widths[1], 8, f' {str(row.get("Generic Name", ""))[:70]}', border=1, fill=fill_row)
-        pdf.cell(widths[2], 8, str(row.get("Required Qty", "")), border=1, align="C", fill=fill_row)
-        pdf.cell(widths[3], 8, str(row.get("Installed Qty", "")), border=1, align="C", fill=fill_row)
-        pdf.cell(widths[4], 8, str(row.get("Surplus Qty", "")), border=1, align="C", fill=fill_row)
-        pdf.cell(widths[5], 8, f' {str(row.get("Status", ""))[:25]}', border=1, fill=fill_row)
-        pdf.ln()
+        # 3. කොටු සහ අකුරු ඇඳීම (Multi_cell භාවිතයෙන්)
+        start_x = pdf.get_x()
+        start_y = pdf.get_y()
+        
+        for i, col in enumerate(cols):
+            text = str(row.get(col, ""))
+            if text == "nan" or text == "None": text = ""
+            
+            if fill_row: 
+                pdf.set_fill_color(248, 248, 248)
+            else: 
+                pdf.set_fill_color(255, 255, 255)
+                
+            pdf.rect(start_x, start_y, widths[i], row_height, style='DF')
+            
+            pdf.set_xy(start_x, start_y)
+            align = "C" if widths[i] < 25 else "L"
+            
+            pdf.multi_cell(widths[i], line_height, text, border=0, align=align)
+            
+            start_x += widths[i]
+            
+        pdf.set_xy(10, start_y + row_height)
+        
     return bytes(pdf.output())
 
 # ==========================================
@@ -497,31 +517,44 @@ with tab2:
                 
         st.markdown("---")
         st.subheader("📥 Select & Export Removal Data")
-        st.write("Filter by Site and select the items you want to export as PDF or Excel:")
+        st.markdown("---")
+        st.subheader("📥 Select & Export Removal Data")
+        st.write("Filter by Site and select exactly which columns to export:")
         
-        col_export, _ = st.columns(2)
-        with col_export:
+        col_export1, col_export2 = st.columns(2)
+        with col_export1:
             export_site_filter = st.selectbox("Filter Export by Site ID:", ["All Sites"] + site_list_rem, key="rem_export_filter")
-        
+            
         df_export_rem = df_removal.copy()
         if export_site_filter != "All Sites":
             df_export_rem = df_export_rem[df_export_rem['Site ID'] == export_site_filter]
-            
-        df_export_rem.insert(0, "Select for Export", True) 
-        
-        edited_export_rem = st.data_editor(df_export_rem, use_container_width=True, hide_index=True, key="rem_export_editor")
-        selected_export_data = edited_export_rem[edited_export_rem["Select for Export"] == True].drop(columns=["Select for Export"])
-        
-        ex_col1, ex_col2 = st.columns(2)
-        with ex_col1:
-            ex_rem_excel = to_excel(selected_export_data)
-            st.download_button(label="💾 Download Selected as Excel", data=ex_rem_excel, file_name="Site_Removal_Materials.xlsx", mime="application/vnd.ms-excel")
-        with ex_col2:
-            ex_rem_pdf = generate_table_export_pdf(selected_export_data, "Site Removal Materials Export")
-            st.download_button(label="📄 Download Selected as PDF", data=ex_rem_pdf, file_name="Site_Removal_Materials.pdf", mime="application/pdf")
 
-    else:
-        st.info("No removal material data available yet.")
+        # සියලුම කොලම් ලබාගැනීම සහ මූලිකව පෙන්වන කොලම් තේරීම
+        all_cols = df_export_rem.columns.tolist()
+        default_cols = ["Site ID", "Removed Item Description", "SN", "UOM", "Removal Qty", "Return Status", "Returned Qty", "Remarks"]
+        default_cols = [c for c in default_cols if c in all_cols]
+
+        with col_export2:
+            # ඔයාට ඕනෙම කොලම් එකක් මෙතනින් අයින් කරන්න/එකතු කරන්න පුළුවන්
+            selected_cols = st.multiselect("Select columns for Export Table:", all_cols, default=default_cols, key="rem_col_select")
+            
+        if not selected_cols:
+            st.warning("Please select at least one column to export.")
+        else:
+            # තේරූ කොලම් පමණක් වෙන්කර ගැනීම
+            df_export_display = df_export_rem[selected_cols].copy()
+            df_export_display.insert(0, "Select for Export", True)
+            
+            edited_export_rem = st.data_editor(df_export_display, use_container_width=True, hide_index=True, key="rem_export_editor")
+            selected_export_data = edited_export_rem[edited_export_rem["Select for Export"] == True].drop(columns=["Select for Export"])
+            
+            ex_col1, ex_col2 = st.columns(2)
+            with ex_col1:
+                ex_rem_excel = to_excel(selected_export_data)
+                st.download_button(label="💾 Download Selected as Excel", data=ex_rem_excel, file_name="Site_Removal_Materials.xlsx", mime="application/vnd.ms-excel")
+            with ex_col2:
+                ex_rem_pdf = generate_table_export_pdf(selected_export_data, "Site Removal Materials Export")
+                st.download_button(label="📄 Download Selected as PDF", data=ex_rem_pdf, file_name="Site_Removal_Materials.pdf", mime="application/pdf")
 
 # ==========================================
 # TAB: SETTINGS (ADMIN ONLY)
