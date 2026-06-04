@@ -283,25 +283,22 @@ def generate_table_export_pdf(df, title):
     
     cols = list(df.columns)
     
-    # එක් එක් කොලම් එකට අදාළව පළල (Width) කලින්ම සකසා තිබීම
+    # එක් එක් කොලම් එකට අදාළව පළල (Width) - Removal Qty එකට ඉඩ වැඩි කර ඇත
     width_map = {
-        "Index": 12, "Site ID": 22, "Site Name": 25, "Removed Item": 35, 
-        "Removed Item Description": 65, "UOM": 12, "Removal Qty": 18, 
-        "SN": 35, "Return Status": 22, "Returned Qty": 18, "Remarks": 55,
-        # පහත ඒවා Main Materials සඳහා අවශ්‍ය වේ
-        "Status": 20, "Required Qty": 18, "Materials From": 25,
+        "Index": 10, "Site ID": 20, "Site Name": 22, "Removed Item": 30, 
+        "Removed Item Description": 55, "UOM": 12, "Removal Qty": 22, 
+        "SN": 30, "Return Status": 22, "Returned Qty": 22, "Remarks": 45,
+        "Status": 20, "Required Qty": 20, "Materials From": 25,
         "Request Type": 25, "IR/MO": 25, "Item Code_INV": 25,
         "SE": 20, "Subcon": 20
     }
     
-    # ඔයා තෝරන කොලම් වලට අදාළව පමණක් පළල ලබා ගැනීම
     widths = [width_map.get(col, 25) for col in cols]
     
     pdf.set_font("Arial", "B", 9)
     pdf.set_fill_color(44, 62, 80)
     pdf.set_text_color(255, 255, 255)
     
-    # Table Header දැමීම
     for i in range(len(cols)):
         pdf.cell(widths[i], 8, str(cols[i]), border=1, align="C", fill=True)
     pdf.ln()
@@ -310,11 +307,9 @@ def generate_table_export_pdf(df, title):
     pdf.set_text_color(0, 0, 0)
     line_height = 5
     
-    # Table Rows දැමීම (Text Wrap වන ආකාරයට)
     for idx, row in df.iterrows():
         fill_row = True if idx % 2 == 0 else False
         
-        # 1. මේ පේළියේ අකුරු කොච්චර දිගදැයි බලා උපරිම උස (Max Height) තීරණය කිරීම
         max_lines = 1
         for i, col in enumerate(cols):
             text = str(row.get(col, ""))
@@ -332,7 +327,6 @@ def generate_table_export_pdf(df, title):
                 
         row_height = max_lines * line_height
         
-        # 2. පිටුව ඉවරවීගෙන එයි නම් ඊළඟ පිටුවට යාම
         if pdf.get_y() + row_height > 190:
             pdf.add_page()
             pdf.set_font("Arial", "B", 9)
@@ -344,7 +338,6 @@ def generate_table_export_pdf(df, title):
             pdf.set_font("Arial", "", 8)
             pdf.set_text_color(0, 0, 0)
 
-        # 3. කොටු සහ අකුරු ඇඳීම (Multi_cell භාවිතයෙන්)
         start_x = pdf.get_x()
         start_y = pdf.get_y()
         
