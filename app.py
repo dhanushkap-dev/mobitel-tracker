@@ -283,7 +283,7 @@ def generate_table_export_pdf(df, title):
     
     cols = list(df.columns)
     
-    # එක් එක් කොලම් එකට අදාළව පළල (Width) - Removal Qty එකට ඉඩ වැඩි කර ඇත
+    # එක් එක් කොලම් එකට අදාළව පළල (Width)
     width_map = {
         "Index": 10, "Site ID": 20, "Site Name": 22, "Removed Item": 30, 
         "Removed Item Description": 55, "UOM": 12, "Removal Qty": 22, 
@@ -295,10 +295,24 @@ def generate_table_export_pdf(df, title):
     
     widths = [width_map.get(col, 25) for col in cols]
     
+    # --- අලුත් කෑල්ල: ටේබල් එක මැද්දට (Center) කිරීම ---
+    total_table_width = sum(widths)
+    page_width = 297 # A4 Landscape width in mm
+    
+    # ඉතුරු වෙන ඉඩ දෙකට බෙදලා වම් පැත්තෙන් තියන්න ඕන ඉඩ හොයාගැනීම
+    left_margin = (page_width - total_table_width) / 2
+    if left_margin < 5: 
+        left_margin = 5 # පිටුවෙන් එළියට පනිනවා නම් අවම ඉඩ 5mm ලෙස තැබීම
+        
+    pdf.set_left_margin(left_margin)
+    pdf.set_x(left_margin)
+    # --------------------------------------------------
+    
     pdf.set_font("Arial", "B", 9)
     pdf.set_fill_color(44, 62, 80)
     pdf.set_text_color(255, 255, 255)
     
+    # Table Header
     for i in range(len(cols)):
         pdf.cell(widths[i], 8, str(cols[i]), border=1, align="C", fill=True)
     pdf.ln()
@@ -307,6 +321,7 @@ def generate_table_export_pdf(df, title):
     pdf.set_text_color(0, 0, 0)
     line_height = 5
     
+    # Table Rows
     for idx, row in df.iterrows():
         fill_row = True if idx % 2 == 0 else False
         
@@ -327,8 +342,10 @@ def generate_table_export_pdf(df, title):
                 
         row_height = max_lines * line_height
         
+        # අලුත් පිටුවකට යනවා නම්
         if pdf.get_y() + row_height > 190:
             pdf.add_page()
+            pdf.set_x(left_margin) # අලුත් පිටුවෙත් ටේබල් එක මැද්දට ගැනීම
             pdf.set_font("Arial", "B", 9)
             pdf.set_fill_color(44, 62, 80)
             pdf.set_text_color(255, 255, 255)
@@ -359,7 +376,8 @@ def generate_table_export_pdf(df, title):
             
             start_x += widths[i]
             
-        pdf.set_xy(10, start_y + row_height)
+        # ඊළඟ පේළිය පටන් ගන්න කලින් ආයෙත් හරියටම මැද්දට සෙට් කිරීම
+        pdf.set_xy(left_margin, start_y + row_height)
         
     return bytes(pdf.output())
 
