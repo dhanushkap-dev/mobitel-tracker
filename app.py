@@ -277,7 +277,7 @@ def generate_table_export_pdf(df, title):
     
     # එක් එක් කොලම් එකට අදාළව පළල (Width) කලින්ම සකසා තිබීම
     width_map = {
-        "Site ID": 22, "Site Name": 25, "Removed Item": 35, 
+        "Index": 12, "Site ID": 22, "Site Name": 25, "Removed Item": 35, 
         "Removed Item Description": 65, "UOM": 12, "Removal Qty": 18, 
         "SN": 35, "Return Status": 22, "Returned Qty": 18, "Remarks": 55,
         # පහත ඒවා Main Materials සඳහා අවශ්‍ය වේ
@@ -406,10 +406,12 @@ with tab1:
         selected_site = st.selectbox("Select Site ID to Update:", ["-- Select a Site --"] + site_list, key="main_site_select")
         
         if selected_site != "-- Select a Site --":
-            df_filtered = df_main[df_main['Site ID'] == selected_site]
-            disabled_cols = ["ERP Site ID", "Mat Req Ref", "Site ID", "Site Name", "HQ/TaskID", "Generic Name", "Item Description", "UOM", "Required Qty", "Materials From", "Request Type", "IR/MO", "Item Code_INV", "SE", "Subcon"]
+            df_filtered = df_main[df_main['Site ID'] == selected_site].copy()
+            # මෙතනින් Index කොලම් එක එකතු වෙනවා
+            df_filtered.insert(0, "Index", range(1, len(df_filtered) + 1))
             
-            # Evidence Photo Link Column එකතු කිරීම
+            disabled_cols = ["Index", "ERP Site ID", "Mat Req Ref", "Site ID", "Site Name", "HQ/TaskID", "Generic Name", "Item Description", "UOM", "Required Qty", "Materials From", "Request Type", "IR/MO", "Item Code_INV", "SE", "Subcon"]
+            
             edited_df = st.data_editor(
                 df_filtered, 
                 disabled=disabled_cols, 
@@ -424,7 +426,9 @@ with tab1:
             if st.button("Save Updates to Database", type="primary", key="save_main"):
                 with st.spinner("Saving data..."):
                     try:
-                        df_main.update(edited_df)
+                        # Index එක අයින් කරලා Google Sheet එකට සේව් කරනවා
+                        save_df = edited_df.drop(columns=["Index"])
+                        df_main.update(save_df)
                         updated_data = [df_main.columns.values.tolist()] + df_main.fillna("").values.tolist()
                         main_sheet.update(updated_data)
                         st.cache_data.clear()
@@ -446,7 +450,10 @@ with tab1:
         with col1:
             status_filter = st.selectbox("Filter by Status:", ["All", "Installed", "Surplus", "HO"])
             
-        export_df = df_main if status_filter == "All" else df_main[df_main['Status'] == status_filter]
+        export_df = df_main.copy() if status_filter == "All" else df_main[df_main['Status'] == status_filter].copy()
+        # Export එකටත් Index එක දානවා
+        export_df.insert(0, "Index", range(1, len(export_df) + 1))
+        
         st.dataframe(export_df, use_container_width=True)
         
         ex_col_m1, ex_col_m2 = st.columns(2)
@@ -454,7 +461,6 @@ with tab1:
             excel_data = to_excel(export_df)
             st.download_button(label=f"💾 Download {status_filter} Data (Excel)", data=excel_data, file_name=f"Main_Materials_{status_filter}.xlsx", mime="application/vnd.ms-excel")
         with ex_col_m2:
-            # මෙතන generate_main_export_pdf වෙනුවට අලුත් generate_table_export_pdf පාවිච්චි කර ඇත
             pdf_main_data = generate_table_export_pdf(export_df, f"Main Materials - {status_filter} Data")
             st.download_button(label=f"📄 Download {status_filter} Data (PDF)", data=pdf_main_data, file_name=f"Main_Materials_{status_filter}.pdf", mime="application/pdf")
     else:
@@ -469,12 +475,14 @@ with tab2:
         
         if selected_site_rem != "-- Select a Site --":
             df_filtered_rem = df_removal[df_removal['Site ID'] == selected_site_rem].copy()
+            # Index එක සහ Select Box එක මුලට එකතු කරනවා
+            df_filtered_rem.insert(0, "Index", range(1, len(df_filtered_rem) + 1))
             df_filtered_rem.insert(0, "Select for Delivery Note", False)
-            disabled_cols_rem = ["Site ID", "Site Name", "Removed Item Description", "UOM"]
+            
+            disabled_cols_rem = ["Index", "Site ID", "Site Name", "Removed Item Description", "UOM"]
             
             st.markdown("**Check the boxes to select items for Handover / Delivery Note:**")
             
-            # Evidence Photo Link Column එකතු කිරීම
             edited_df_rem = st.data_editor(
                 df_filtered_rem, 
                 disabled=disabled_cols_rem, 
@@ -489,7 +497,7 @@ with tab2:
             if st.button("Save Removal Updates", type="primary", key="save_rem"):
                 with st.spinner("Saving data..."):
                     try:
-                        save_df = edited_df_rem.drop(columns=["Select for Delivery Note"])
+                        save_df = edited_df_rem.drop(columns=["Select for Delivery Note", "Index"])
                         df_removal.update(save_df)
                         updated_data_rem = [df_removal.columns.values.tolist()] + df_removal.fillna("").values.tolist()
                         removal_sheet.update(updated_data_rem)
@@ -539,7 +547,6 @@ with tab2:
             else:
                 st.warning("Select items using checkboxes above to generate Delivery Note.")
                 
-        # මෙතන තිබුණු Duplicate කෑලි අයින් කරලා ලස්සනට හැදුවා
         st.markdown("---")
         st.subheader("📥 Select & Export Removal Data")
         st.write("Filter by Site and select exactly which columns to export:")
@@ -551,20 +558,20 @@ with tab2:
         df_export_rem = df_removal.copy()
         if export_site_filter != "All Sites":
             df_export_rem = df_export_rem[df_export_rem['Site ID'] == export_site_filter]
+            
+        # මෙතනත් Export Table එකට Index එක දානවා
+        df_export_rem.insert(0, "Index", range(1, len(df_export_rem) + 1))
 
-        # සියලුම කොලම් ලබාගැනීම සහ මූලිකව පෙන්වන කොලම් තේරීම
         all_cols = df_export_rem.columns.tolist()
-        default_cols = ["Site ID", "Removed Item Description", "SN", "UOM", "Removal Qty", "Return Status", "Returned Qty", "Remarks"]
+        default_cols = ["Index", "Site ID", "Removed Item Description", "SN", "UOM", "Removal Qty", "Return Status", "Returned Qty", "Remarks"]
         default_cols = [c for c in default_cols if c in all_cols]
 
         with col_export2:
-            # ඔයාට ඕනෙම කොලම් එකක් මෙතනින් අයින් කරන්න/එකතු කරන්න පුළුවන්
             selected_cols = st.multiselect("Select columns for Export Table:", all_cols, default=default_cols, key="rem_col_select")
             
         if not selected_cols:
             st.warning("Please select at least one column to export.")
         else:
-            # තේරූ කොලම් පමණක් වෙන්කර ගැනීම
             df_export_display = df_export_rem[selected_cols].copy()
             df_export_display.insert(0, "Select for Export", True)
             
