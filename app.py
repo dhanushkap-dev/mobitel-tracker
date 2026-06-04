@@ -457,17 +457,24 @@ with tab1:
         # --- අලුත් කරපු Main Materials Export කොටස ---
         st.markdown("---")
         st.subheader("📥 Select & Export Main Materials Data")
-        st.write("Filter by Status and select exactly which columns to export:")
+        st.write("Filter by Site and Status, then select exactly which columns to export:")
         
         col_export_m1, col_export_m2 = st.columns(2)
         with col_export_m1:
-            status_filter = st.selectbox("Filter by Status:", ["All", "Installed", "Surplus", "HO"], key="main_export_status")
+            main_export_site_filter = st.selectbox("Filter Export by Site ID:", ["All Sites"] + site_list, key="main_export_site_filter")
+            status_filter = st.selectbox("Filter Export by Status:", ["All", "Installed", "Surplus", "HO"], key="main_export_status")
             
-        export_df = df_main.copy() if status_filter == "All" else df_main[df_main['Status'] == status_filter].copy()
+        export_df = df_main.copy()
+        
+        # ෆිල්ටර් දෙකම ඇප්ලයි කිරීම
+        if main_export_site_filter != "All Sites":
+            export_df = export_df[export_df['Site ID'] == main_export_site_filter]
+        if status_filter != "All":
+            export_df = export_df[export_df['Status'] == status_filter]
+            
         export_df.insert(0, "Index", range(1, len(export_df) + 1))
         
         all_cols_main = export_df.columns.tolist()
-        # මූලිකව තෝරලා තියෙන කොලම් ටික (ඔයාට ඕනෙම ඒවා)
         default_cols_main = ["Index", "Site ID", "Site Name", "Generic Name", "Item Description", "UOM", "Required Qty", "Status", "Remarks"]
         default_cols_main = [c for c in default_cols_main if c in all_cols_main]
         
@@ -486,10 +493,16 @@ with tab1:
             ex_col_m1, ex_col_m2 = st.columns(2)
             with ex_col_m1:
                 excel_data = to_excel(selected_export_data_main)
-                st.download_button(label=f"💾 Download {status_filter} Data (Excel)", data=excel_data, file_name=f"Main_Materials_{status_filter}.xlsx", mime="application/vnd.ms-excel")
+                # Excel file name සෑදීම
+                ex_name = f"Main_Materials_{main_export_site_filter}_{status_filter}.xlsx" if main_export_site_filter != "All Sites" else f"Main_Materials_{status_filter}.xlsx"
+                st.download_button(label="💾 Download Selected Data (Excel)", data=excel_data, file_name=ex_name, mime="application/vnd.ms-excel")
             with ex_col_m2:
-                pdf_main_data = generate_table_export_pdf(selected_export_data_main, f"Main Materials - {status_filter} Data")
-                st.download_button(label=f"📄 Download {status_filter} Data (PDF)", data=pdf_main_data, file_name=f"Main_Materials_{status_filter}.pdf", mime="application/pdf")
+                # PDF file name සෑදීම
+                pdf_name = f"Main_Materials_{main_export_site_filter}_{status_filter}.pdf" if main_export_site_filter != "All Sites" else f"Main_Materials_{status_filter}.pdf"
+                pdf_title = f"Main Materials - {status_filter} Data" if main_export_site_filter == "All Sites" else f"Main Materials - {status_filter} Data ({main_export_site_filter})"
+                
+                pdf_main_data = generate_table_export_pdf(selected_export_data_main, pdf_title)
+                st.download_button(label="📄 Download Selected Data (PDF)", data=pdf_main_data, file_name=pdf_name, mime="application/pdf")
     else:
         st.info("No data available.")
 
@@ -603,10 +616,13 @@ with tab2:
             ex_col1, ex_col2 = st.columns(2)
             with ex_col1:
                 ex_rem_excel = to_excel(selected_export_data)
-                st.download_button(label="💾 Download Selected as Excel", data=ex_rem_excel, file_name="Site_Removal_Materials.xlsx", mime="application/vnd.ms-excel")
+                ex_rem_name = f"Site_Removal_Materials_{export_site_filter}.xlsx" if export_site_filter != "All Sites" else "Site_Removal_Materials.xlsx"
+                st.download_button(label="💾 Download Selected as Excel", data=ex_rem_excel, file_name=ex_rem_name, mime="application/vnd.ms-excel")
             with ex_col2:
-                ex_rem_pdf = generate_table_export_pdf(selected_export_data, "Site Removal Materials Export")
-                st.download_button(label="📄 Download Selected as PDF", data=ex_rem_pdf, file_name="Site_Removal_Materials.pdf", mime="application/pdf")
+                pdf_rem_title = f"Site Removal Materials Export ({export_site_filter})" if export_site_filter != "All Sites" else "Site Removal Materials Export"
+                pdf_rem_name = f"Site_Removal_Materials_{export_site_filter}.pdf" if export_site_filter != "All Sites" else "Site_Removal_Materials.pdf"
+                ex_rem_pdf = generate_table_export_pdf(selected_export_data, pdf_rem_title)
+                st.download_button(label="📄 Download Selected as PDF", data=ex_rem_pdf, file_name=pdf_rem_name, mime="application/pdf")
 
 # ==========================================
 # TAB: SETTINGS (ADMIN ONLY)
