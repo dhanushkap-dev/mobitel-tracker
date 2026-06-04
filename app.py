@@ -284,29 +284,38 @@ def generate_table_export_pdf(df, title):
     
     cols = list(df.columns)
     
-    # Main Materials සහ Removal Materials දෙකටම ගැලපෙන පළලවල් (Widths)
+    # SN එකට 45 ක් දීලා තියෙනවා එක පේළියට එන්න. අනිත් ඒවත් ගැලපුවා.
     width_map = {
-        "Index": 10, "Site ID": 20, "Site Name": 25, "Removed Item": 30, 
-        "Removed Item Description": 55, "UOM": 12, "Removal Qty": 22, 
-        "SN": 30, "Return Status": 22, "Returned Qty": 22, "Remarks": 45,
-        "Status": 20, "Required Qty": 20, "Materials From": 25,
-        "Request Type": 25, "IR/MO": 25, "Item Code_INV": 25,
-        "SE": 20, "Subcon": 20, "Generic Name": 35, "Item Description": 55,
-        "ERP Site ID": 30, "Mat Req Ref": 30, "HQ/TaskID": 40,
-        "Handed Over Qty": 22
+        "Index": 10, "Site ID": 18, "Site Name": 25, "Removed Item": 30, 
+        "Removed Item Description": 50, "UOM": 12, "Removal Qty": 20, 
+        "SN": 45, "Return Status": 22, "Returned Qty": 20, "Remarks": 45,
+        "Status": 18, "Required Qty": 20, "Materials From": 25,
+        "Request Type": 22, "IR/MO": 20, "Item Code_INV": 25,
+        "SE": 18, "Subcon": 18, "Generic Name": 35, "Item Description": 55,
+        "ERP Site ID": 30, "Mat Req Ref": 30, "HQ/TaskID": 35,
+        "Handed Over Qty": 20
     }
     
     widths = [width_map.get(col, 25) for col in cols]
     
+    # --- අලුත් කරපු Dynamic Scaling සහ Centering ---
     total_table_width = sum(widths)
-    page_width = 297 
+    max_page_width = 285 # A4 කොළේ පළල 297mm. දෙපැත්තෙන් 6mm ගානේ ඉතුරු කරන්න 285mm.
     
+    # ටේබල් එක කොළේට වඩා ලොකු නම්, ඔටෝම Scale කරලා පොඩි කරනවා
+    if total_table_width > max_page_width:
+        scale_factor = max_page_width / total_table_width
+        widths = [w * scale_factor for w in widths]
+        total_table_width = sum(widths)
+        
+    page_width = 297 
     left_margin = (page_width - total_table_width) / 2
     if left_margin < 5: 
         left_margin = 5 
         
     pdf.set_left_margin(left_margin)
     pdf.set_x(left_margin)
+    # -----------------------------------------------
     
     pdf.set_font("Arial", "B", 9)
     pdf.set_fill_color(44, 62, 80)
@@ -330,7 +339,6 @@ def generate_table_export_pdf(df, title):
             
             safe_width = widths[i] - 2 if widths[i] > 2 else 1
             
-            # --- අලුත් කරපු නිවැරදි පේළි ගණනය කිරීම (Accurate Word-Wrapping Logic) ---
             lines = 0
             for p in text.split('\n'):
                 words = p.split(' ')
@@ -344,7 +352,6 @@ def generate_table_export_pdf(df, title):
                         line_w += w_w
                 lines += 1
                 
-            # දිග වචන (Spaces නැති ඒවා) සඳහා ආරක්ෂාව
             math_lines = math.ceil(pdf.get_string_width(text) / safe_width)
             final_lines = max(lines, math_lines)
             
