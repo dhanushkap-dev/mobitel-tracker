@@ -6,7 +6,7 @@ import io
 import os
 import json
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
 from fpdf import FPDF
 import math
 
@@ -14,6 +14,10 @@ import math
 # CONFIGURATION & SETUP
 # ==========================================
 st.set_page_config(page_title="Mobitel Material Tracker", layout="wide", page_icon="📡")
+
+# ලංකාවේ වෙලාව ලබා ගැනීමේ ශ්‍රිතය (Sri Lanka Time: UTC + 5:30)
+def get_sl_time():
+    return datetime.utcnow() + timedelta(hours=5, minutes=30)
 
 # --- BACKGROUND IMAGE FUNCTION ---
 def set_bg_hack(main_bg):
@@ -270,7 +274,11 @@ def generate_table_export_pdf(df, title):
     pdf.cell(0, 10, title, ln=True, align="C")
     pdf.set_font("Arial", "I", 10)
     pdf.set_text_color(100, 100, 100)
-    pdf.cell(0, 8, f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True, align="C")
+    
+    # ලංකාවේ වෙලාව PDF එකට දැමීම
+    sl_time_str = get_sl_time().strftime('%Y-%m-%d %H:%M')
+    pdf.cell(0, 8, f"Generated on: {sl_time_str} (SLST)", ln=True, align="C")
+    
     pdf.ln(5)
     
     cols = list(df.columns)
@@ -521,7 +529,7 @@ with tab2:
                 with st.form("delivery_note_form"):
                     col_a, col_b = st.columns(2)
                     with col_a:
-                        dn_number = st.text_input("Delivery Note #", value=datetime.now().strftime("%Y%m%d%H%M"))
+                        dn_number = st.text_input("Delivery Note #", value=get_sl_time().strftime("%Y%m%d%H%M"))
                         issued_by = st.text_input("Issued By", value="Warehouse Officer")
                         issued_to = st.text_input("Issued To (e.g., DAR)")
                         rec_company = st.text_input("Receiver Company")
@@ -536,7 +544,7 @@ with tab2:
                     with st.spinner("Generating PDF..."):
                         try:
                             pdf_bytes = generate_delivery_note_pdf(
-                                dn_number, datetime.now().strftime("%Y/%m/%d"), issued_by, issued_to, 
+                                dn_number, get_sl_time().strftime("%Y/%m/%d"), issued_by, issued_to, 
                                 selected_site_rem, selected_items_df, rec_company, rec_name, rec_nic, rec_mobile, rec_vehicle
                             )
                             file_name = f"DeliveryNote_{dn_number}.pdf"
