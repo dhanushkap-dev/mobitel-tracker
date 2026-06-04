@@ -234,11 +234,15 @@ def generate_delivery_note_pdf(dn_number, date, issued_by, issued_to, mapped_fro
         if fill_row: pdf.set_fill_color(248, 248, 248)
         else: pdf.set_fill_color(255, 255, 255)
         pdf.cell(widths[0], 8, f"{idx:02d}", border=1, align="C", fill=fill_row)
-        item_name = str(r.get("Generic Name", r.get("Removed Item Description", "")))[:20]
+        
+        # මෙතන තමයි වෙනස් වුණේ. Removed Item Description එක හිස් නම් Removed Item එක ගන්නවා
+        item_name = str(r.get("Generic Name", r.get("Removed Item", "")))[:20]
         desc = str(r.get("Item Description", r.get("Removed Item Description", "")))[:40]
+        
         serial = str(r.get("SN", "N/A"))
         qty = str(r.get("Handed Over Qty", r.get("Removal Qty", "")))
         remarks = str(r.get("Remarks", ""))[:15]
+        
         pdf.cell(widths[1], 8, f" {item_name}", border=1, fill=fill_row)
         pdf.cell(widths[2], 8, f" {desc}", border=1, fill=fill_row)
         pdf.cell(widths[3], 8, serial, border=1, align="C", fill=fill_row)
@@ -275,7 +279,6 @@ def generate_table_export_pdf(df, title):
     pdf.set_font("Arial", "I", 10)
     pdf.set_text_color(100, 100, 100)
     
-    # ලංකාවේ වෙලාව PDF එකට දැමීම
     sl_time_str = get_sl_time().strftime('%Y-%m-%d %H:%M')
     pdf.cell(0, 8, f"Generated on: {sl_time_str} (SLST)", ln=True, align="C")
     
@@ -283,7 +286,6 @@ def generate_table_export_pdf(df, title):
     
     cols = list(df.columns)
     
-    # එක් එක් කොලම් එකට අදාළව පළල (Width)
     width_map = {
         "Index": 10, "Site ID": 20, "Site Name": 22, "Removed Item": 30, 
         "Removed Item Description": 55, "UOM": 12, "Removal Qty": 22, 
@@ -295,24 +297,20 @@ def generate_table_export_pdf(df, title):
     
     widths = [width_map.get(col, 25) for col in cols]
     
-    # --- අලුත් කෑල්ල: ටේබල් එක මැද්දට (Center) කිරීම ---
     total_table_width = sum(widths)
-    page_width = 297 # A4 Landscape width in mm
+    page_width = 297 
     
-    # ඉතුරු වෙන ඉඩ දෙකට බෙදලා වම් පැත්තෙන් තියන්න ඕන ඉඩ හොයාගැනීම
     left_margin = (page_width - total_table_width) / 2
     if left_margin < 5: 
-        left_margin = 5 # පිටුවෙන් එළියට පනිනවා නම් අවම ඉඩ 5mm ලෙස තැබීම
+        left_margin = 5 
         
     pdf.set_left_margin(left_margin)
     pdf.set_x(left_margin)
-    # --------------------------------------------------
     
     pdf.set_font("Arial", "B", 9)
     pdf.set_fill_color(44, 62, 80)
     pdf.set_text_color(255, 255, 255)
     
-    # Table Header
     for i in range(len(cols)):
         pdf.cell(widths[i], 8, str(cols[i]), border=1, align="C", fill=True)
     pdf.ln()
@@ -321,7 +319,6 @@ def generate_table_export_pdf(df, title):
     pdf.set_text_color(0, 0, 0)
     line_height = 5
     
-    # Table Rows
     for idx, row in df.iterrows():
         fill_row = True if idx % 2 == 0 else False
         
@@ -342,10 +339,9 @@ def generate_table_export_pdf(df, title):
                 
         row_height = max_lines * line_height
         
-        # අලුත් පිටුවකට යනවා නම්
         if pdf.get_y() + row_height > 190:
             pdf.add_page()
-            pdf.set_x(left_margin) # අලුත් පිටුවෙත් ටේබල් එක මැද්දට ගැනීම
+            pdf.set_x(left_margin) 
             pdf.set_font("Arial", "B", 9)
             pdf.set_fill_color(44, 62, 80)
             pdf.set_text_color(255, 255, 255)
@@ -376,7 +372,6 @@ def generate_table_export_pdf(df, title):
             
             start_x += widths[i]
             
-        # ඊළඟ පේළිය පටන් ගන්න කලින් ආයෙත් හරියටම මැද්දට සෙට් කිරීම
         pdf.set_xy(left_margin, start_y + row_height)
         
     return bytes(pdf.output())
@@ -426,26 +421,22 @@ with tab1:
         
         if selected_site != "-- Select a Site --":
             df_filtered = df_main[df_main['Site ID'] == selected_site].copy()
-            # මෙතනින් Index කොලම් එක එකතු වෙනවා
             df_filtered.insert(0, "Index", range(1, len(df_filtered) + 1))
             
             disabled_cols = ["Index", "ERP Site ID", "Mat Req Ref", "Site ID", "Site Name", "HQ/TaskID", "Generic Name", "Item Description", "UOM", "Required Qty", "Materials From", "Request Type", "IR/MO", "Item Code_INV", "SE", "Subcon"]
             
+            # Evidence Photo Link Column සැකසුම ඉවත් කර ඇත (සාමාන්‍ය තීරුවක් ලෙස ක්‍රියා කරයි)
             edited_df = st.data_editor(
                 df_filtered, 
                 disabled=disabled_cols, 
                 use_container_width=True, 
                 hide_index=True, 
-                key="main_data_editor",
-                column_config={
-                    "Remarks": st.column_config.LinkColumn("Remarks", display_text="Evidence Photo")
-                }
+                key="main_data_editor"
             )
             
             if st.button("Save Updates to Database", type="primary", key="save_main"):
                 with st.spinner("Saving data..."):
                     try:
-                        # Index එක අයින් කරලා Google Sheet එකට සේව් කරනවා
                         save_df = edited_df.drop(columns=["Index"])
                         df_main.update(save_df)
                         updated_data = [df_main.columns.values.tolist()] + df_main.fillna("").values.tolist()
@@ -470,7 +461,6 @@ with tab1:
             status_filter = st.selectbox("Filter by Status:", ["All", "Installed", "Surplus", "HO"])
             
         export_df = df_main.copy() if status_filter == "All" else df_main[df_main['Status'] == status_filter].copy()
-        # Export එකටත් Index එක දානවා
         export_df.insert(0, "Index", range(1, len(export_df) + 1))
         
         st.dataframe(export_df, use_container_width=True)
@@ -494,7 +484,6 @@ with tab2:
         
         if selected_site_rem != "-- Select a Site --":
             df_filtered_rem = df_removal[df_removal['Site ID'] == selected_site_rem].copy()
-            # Index එක සහ Select Box එක මුලට එකතු කරනවා
             df_filtered_rem.insert(0, "Index", range(1, len(df_filtered_rem) + 1))
             df_filtered_rem.insert(0, "Select for Delivery Note", False)
             
@@ -502,15 +491,13 @@ with tab2:
             
             st.markdown("**Check the boxes to select items for Handover / Delivery Note:**")
             
+            # Evidence Photo Link Column සැකසුම ඉවත් කර ඇත (සාමාන්‍ය තීරුවක් ලෙස ක්‍රියා කරයි)
             edited_df_rem = st.data_editor(
                 df_filtered_rem, 
                 disabled=disabled_cols_rem, 
                 use_container_width=True, 
                 hide_index=True, 
-                key="rem_data_editor",
-                column_config={
-                    "Remarks": st.column_config.LinkColumn("Remarks", display_text="Evidence Photo")
-                }
+                key="rem_data_editor"
             )
             
             if st.button("Save Removal Updates", type="primary", key="save_rem"):
@@ -578,7 +565,6 @@ with tab2:
         if export_site_filter != "All Sites":
             df_export_rem = df_export_rem[df_export_rem['Site ID'] == export_site_filter]
             
-        # මෙතනත් Export Table එකට Index එක දානවා
         df_export_rem.insert(0, "Index", range(1, len(df_export_rem) + 1))
 
         all_cols = df_export_rem.columns.tolist()
