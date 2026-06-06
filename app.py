@@ -68,7 +68,7 @@ def set_bg_hack(main_bg):
 set_bg_hack("bg.jpg")
 # ---------------------------------
 
-# Ensure Backup Directories Exist (For local execution)
+# Ensure Backup Directories Exist
 BACKUP_DIR = "Delivery_Notes_Backup"
 EVIDENCE_DIR = "Evidence_Backup"
 for d in [BACKUP_DIR, EVIDENCE_DIR]:
@@ -90,7 +90,6 @@ try:
     else:
         creds = Credentials.from_service_account_file("credentials.json", scopes=scopes)
     
-    # Connect Sheets
     client = gspread.authorize(creds)
     
 except Exception as e:
@@ -284,7 +283,6 @@ def generate_table_export_pdf(df, title):
     
     cols = list(df.columns)
     
-    # SN එකට 45 ක් දීලා තියෙනවා එක පේළියට එන්න. අනිත් ඒවත් ගැලපුවා.
     width_map = {
         "Index": 10, "Site ID": 18, "Site Name": 25, "Removed Item": 30, 
         "Removed Item Description": 50, "UOM": 12, "Removal Qty": 20, 
@@ -298,15 +296,21 @@ def generate_table_export_pdf(df, title):
     
     widths = [width_map.get(col, 25) for col in cols]
     
-    # --- අලුත් කරපු Dynamic Scaling සහ Centering ---
     total_table_width = sum(widths)
-    max_page_width = 285 # A4 කොළේ පළල 297mm. දෙපැත්තෙන් 6mm ගානේ ඉතුරු කරන්න 285mm.
+    max_page_width = 285 
     
-    # ටේබල් එක කොළේට වඩා ලොකු නම්, ඔටෝම Scale කරලා පොඩි කරනවා
+    # --- අලුත් කරපු Font සහ Width Scaling ක්‍රමය ---
+    scale_factor = 1.0
     if total_table_width > max_page_width:
         scale_factor = max_page_width / total_table_width
         widths = [w * scale_factor for w in widths]
         total_table_width = sum(widths)
+        
+    # අකුරු සයිස් සහ පේළි පරතරයත් ටේබල් එක එක්කම ඔටෝ පොඩි වීම
+    header_font_size = max(5.0, 9.0 * scale_factor)
+    data_font_size = max(4.5, 8.0 * scale_factor)
+    line_height = max(3.5, 5.0 * scale_factor)
+    # --------------------------------------------------
         
     page_width = 297 
     left_margin = (page_width - total_table_width) / 2
@@ -315,19 +319,18 @@ def generate_table_export_pdf(df, title):
         
     pdf.set_left_margin(left_margin)
     pdf.set_x(left_margin)
-    # -----------------------------------------------
     
-    pdf.set_font("Arial", "B", 9)
+    pdf.set_font("Arial", "B", header_font_size)
     pdf.set_fill_color(44, 62, 80)
     pdf.set_text_color(255, 255, 255)
     
     for i in range(len(cols)):
-        pdf.cell(widths[i], 8, str(cols[i]), border=1, align="C", fill=True)
+        # Header එකට ඉඩ වැඩි කළා අකුරු කැපෙන්නේ නැති වෙන්න
+        pdf.cell(widths[i], line_height + 3, str(cols[i]), border=1, align="C", fill=True)
     pdf.ln()
     
-    pdf.set_font("Arial", "", 8)
+    pdf.set_font("Arial", "", data_font_size)
     pdf.set_text_color(0, 0, 0)
-    line_height = 5
     
     for idx, row in df.iterrows():
         fill_row = True if idx % 2 == 0 else False
@@ -337,39 +340,49 @@ def generate_table_export_pdf(df, title):
             text = str(row.get(col, ""))
             if text == "nan" or text == "None": text = ""
             
-            safe_width = widths[i] - 2 if widths[i] > 2 else 1
+            safe_width = widths[i] - 1 # 1mm padding
             
+            # --- අලුත් කරපු Super Wrap ක්‍රමය ---
             lines = 0
             for p in text.split('\n'):
-                words = p.split(' ')
-                line_w = 0
-                for w in words:
-                    w_w = pdf.get_string_width(w + " ")
-                    if line_w + w_w > safe_width and line_w > 0:
+                p_width = pdf.get_string_width(p)
+                if p_width <= safe_width and p != "":
+                    lines += 1
+                else:
+                    words = p.split(' ')
+                    line_w = 0
+                    for w in words:
+                        w_w = pdf.get_string_width(w + " ")
+                        if w_w > safe_width:
+                            if line_w > 0:
+                                lines += 1
+                                line_w = 0
+                            # හිස්තැන් නැති දිග වචන බලෙන් කඩන ක්‍රමය
+                            lines += math.ceil(pdf.get_string_width(w) / safe_width)
+                        elif line_w + w_w > safe_width:
+                            lines += 1
+                            line_w = w_w
+                        else:
+                            line_w += w_w
+                    if line_w > 0:
                         lines += 1
-                        line_w = w_w
-                    else:
-                        line_w += w_w
-                lines += 1
-                
-            math_lines = math.ceil(pdf.get_string_width(text) / safe_width)
-            final_lines = max(lines, math_lines)
+            if lines == 0: lines = 1
             
-            if final_lines > max_lines:
-                max_lines = final_lines
+            if lines > max_lines:
+                max_lines = lines
                 
         row_height = max_lines * line_height
         
         if pdf.get_y() + row_height > 190:
             pdf.add_page()
             pdf.set_x(left_margin) 
-            pdf.set_font("Arial", "B", 9)
+            pdf.set_font("Arial", "B", header_font_size)
             pdf.set_fill_color(44, 62, 80)
             pdf.set_text_color(255, 255, 255)
             for i in range(len(cols)):
-                pdf.cell(widths[i], 8, str(cols[i]), border=1, align="C", fill=True)
+                pdf.cell(widths[i], line_height + 3, str(cols[i]), border=1, align="C", fill=True)
             pdf.ln()
-            pdf.set_font("Arial", "", 8)
+            pdf.set_font("Arial", "", data_font_size)
             pdf.set_text_color(0, 0, 0)
 
         start_x = pdf.get_x()
