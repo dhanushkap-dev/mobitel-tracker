@@ -19,6 +19,14 @@ st.set_page_config(page_title="Mobitel Material Tracker", layout="wide", page_ic
 def get_sl_time():
     return datetime.utcnow() + timedelta(hours=5, minutes=30)
 
+# පින්තූර Base64 වලට හැරවීමේ ශ්‍රිතය (Animation සඳහා)
+def get_base64_image(image_path):
+    try:
+        with open(image_path, "rb") as img_file:
+            return base64.b64encode(img_file.read()).decode()
+    except FileNotFoundError:
+        return ""
+
 # --- BACKGROUND IMAGE FUNCTION ---
 def set_bg_hack(main_bg):
     main_bg_ext = "jpg"
@@ -267,20 +275,39 @@ def generate_delivery_note_pdf(dn_number, date, issued_by, issued_to, mapped_fro
     pdf.cell(95, 5, "Receiver's Signature", align="C", ln=True)
     return bytes(pdf.output())
 
+# අකුරු එළියට පනින්නේ නැති වෙන්න බලෙන් කඩන අලුත් ෆන්ක්ෂන් එක
+def format_text_to_fit(pdf_obj, text, cell_width):
+    if text == "nan" or text == "None" or not text: return ""
+    text = str(text)
+    lines = []
+    for paragraph in text.split('\n'):
+        words = paragraph.split(' ')
+        current_line = ""
+        for word in words:
+            # වචනයක් කොටුවට වඩා දිග නම් අකුරෙන් අකුර බලලා කඩනවා
+            if pdf_obj.get_string_width(word) > cell_width:
+                if current_line:
+                    lines.append(current_line)
+                    current_line = ""
+                chunk = ""
+                for char in word:
+                    if pdf_obj.get_string_width(chunk + char) > cell_width:
+                        lines.append(chunk)
+                        chunk = char
+                    else:
+                        chunk += char
+                current_line = chunk
+            # සාමාන්‍ය වචන පේළියට දානවා
+            elif pdf_obj.get_string_width(current_line + (" " if current_line else "") + word) > cell_width:
+                lines.append(current_line)
+                current_line = word
+            else:
+                current_line += (" " if current_line else "") + word
+        if current_line:
+            lines.append(current_line)
+    return "\n".join(lines)
+
 def generate_table_export_pdf(df, title):
-    pdf = FPDF(orientation='L')
-    pdf.add_page()
-    pdf.set_font("Arial", "B", 16)
-    pdf.set_text_color(44, 62, 80)
-    pdf.cell(0, 10, title, ln=True, align="C")
-    pdf.set_font("Arial", "I", 10)
-    pdf.set_text_color(100, 100, 100)
-    
-    sl_time_str = get_sl_time().strftime('%Y-%m-%d %H:%M')
-    pdf.cell(0, 8, f"Generated on: {sl_time_str} (SLST)", ln=True, align="C")
-    
-    pdf.ln(5)
-    
     cols = list(df.columns)
     
     width_map = {
@@ -294,39 +321,60 @@ def generate_table_export_pdf(df, title):
         "Handed Over Qty": 20
     }
     
-    widths = [width_map.get(col, 25) for col in cols]
+    base_widths = [width_map.get(col, 25) for col in cols]
+    total_unscaled_width = sum(base_widths)
     
-    total_table_width = sum(widths)
-    max_page_width = 285 
+    # --- අලුත් කරපු Portrait / Landscape තීරණය කිරීමේ ක්‍රමය ---
+    # කොලම් අඩු නම් Portrait (දිග අතට), වැඩි නම් Landscape (හරහට)
+    if total_unscaled_width <= 190:
+        orientation = 'P'
+        max_page_width = 190
+        page_total_width = 210
+        page_height = 297
+    else:
+        orientation = 'L'
+        max_page_width = 280
+        page_total_width = 297
+        page_height = 210
     
-    # --- අලුත් කරපු Font සහ Width Scaling ක්‍රමය ---
+    pdf = FPDF(orientation=orientation)
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.set_text_color(44, 62, 80)
+    pdf.cell(0, 10, title, ln=True, align="C")
+    pdf.set_font("Arial", "I", 10)
+    pdf.set_text_color(100, 100, 100)
+    
+    sl_time_str = get_sl_time().strftime('%Y-%m-%d %H:%M')
+    pdf.cell(0, 8, f"Generated on: {sl_time_str} (SLST)", ln=True, align="C")
+    pdf.ln(5)
+    
+    # Scaling - පිටුවට ගැලපෙන විදිහට ඔටෝ සයිස් කිරීම
     scale_factor = 1.0
-    if total_table_width > max_page_width:
-        scale_factor = max_page_width / total_table_width
-        widths = [w * scale_factor for w in widths]
-        total_table_width = sum(widths)
+    if total_unscaled_width > max_page_width:
+        scale_factor = max_page_width / total_unscaled_width
         
-    # අකුරු සයිස් සහ පේළි පරතරයත් ටේබල් එක එක්කම ඔටෝ පොඩි වීම
-    header_font_size = max(5.0, 9.0 * scale_factor)
-    data_font_size = max(4.5, 8.0 * scale_factor)
-    line_height = max(3.5, 5.0 * scale_factor)
-    # --------------------------------------------------
-        
-    page_width = 297 
-    left_margin = (page_width - total_table_width) / 2
+    widths = [w * scale_factor for w in base_widths]
+    total_table_width = sum(widths)
+    
+    left_margin = (page_total_width - total_table_width) / 2
     if left_margin < 5: 
         left_margin = 5 
         
     pdf.set_left_margin(left_margin)
     pdf.set_x(left_margin)
     
+    # අකුරු සයිස් තීරණය කිරීම
+    header_font_size = max(6.0, 9.0 * scale_factor)
+    data_font_size = max(5.5, 8.0 * scale_factor)
+    line_height = max(4.0, 5.0 * scale_factor)
+    
     pdf.set_font("Arial", "B", header_font_size)
     pdf.set_fill_color(44, 62, 80)
     pdf.set_text_color(255, 255, 255)
     
     for i in range(len(cols)):
-        # Header එකට ඉඩ වැඩි කළා අකුරු කැපෙන්නේ නැති වෙන්න
-        pdf.cell(widths[i], line_height + 3, str(cols[i]), border=1, align="C", fill=True)
+        pdf.cell(widths[i], line_height + 4, str(cols[i]), border=1, align="C", fill=True)
     pdf.ln()
     
     pdf.set_font("Arial", "", data_font_size)
@@ -335,52 +383,32 @@ def generate_table_export_pdf(df, title):
     for idx, row in df.iterrows():
         fill_row = True if idx % 2 == 0 else False
         
+        # දත්ත ටික අරගෙන Formatted Text එකයි Max Lines ගාණයි හොයාගන්නවා
+        formatted_texts = []
         max_lines = 1
         for i, col in enumerate(cols):
-            text = str(row.get(col, ""))
-            if text == "nan" or text == "None": text = ""
+            raw_text = str(row.get(col, ""))
+            safe_w = widths[i] - 1  # 1mm padding
             
-            safe_width = widths[i] - 1 # 1mm padding
+            # අපේ අලුත් Function එකෙන් text එක ලස්සනට කඩලා ගන්නවා
+            f_text = format_text_to_fit(pdf, raw_text, safe_w)
+            formatted_texts.append(f_text)
             
-            # --- අලුත් කරපු Super Wrap ක්‍රමය ---
-            lines = 0
-            for p in text.split('\n'):
-                p_width = pdf.get_string_width(p)
-                if p_width <= safe_width and p != "":
-                    lines += 1
-                else:
-                    words = p.split(' ')
-                    line_w = 0
-                    for w in words:
-                        w_w = pdf.get_string_width(w + " ")
-                        if w_w > safe_width:
-                            if line_w > 0:
-                                lines += 1
-                                line_w = 0
-                            # හිස්තැන් නැති දිග වචන බලෙන් කඩන ක්‍රමය
-                            lines += math.ceil(pdf.get_string_width(w) / safe_width)
-                        elif line_w + w_w > safe_width:
-                            lines += 1
-                            line_w = w_w
-                        else:
-                            line_w += w_w
-                    if line_w > 0:
-                        lines += 1
-            if lines == 0: lines = 1
-            
-            if lines > max_lines:
-                max_lines = lines
+            num_lines = f_text.count('\n') + 1 if f_text else 1
+            if num_lines > max_lines:
+                max_lines = num_lines
                 
         row_height = max_lines * line_height
         
-        if pdf.get_y() + row_height > 190:
-            pdf.add_page()
+        # පිටුව ඉවර වේගෙන එයි නම් අලුත් පිටුවක් ගන්නවා
+        if pdf.get_y() + row_height > page_height - 15:
+            pdf.add_page(orientation=orientation)
             pdf.set_x(left_margin) 
             pdf.set_font("Arial", "B", header_font_size)
             pdf.set_fill_color(44, 62, 80)
             pdf.set_text_color(255, 255, 255)
             for i in range(len(cols)):
-                pdf.cell(widths[i], line_height + 3, str(cols[i]), border=1, align="C", fill=True)
+                pdf.cell(widths[i], line_height + 4, str(cols[i]), border=1, align="C", fill=True)
             pdf.ln()
             pdf.set_font("Arial", "", data_font_size)
             pdf.set_text_color(0, 0, 0)
@@ -389,17 +417,18 @@ def generate_table_export_pdf(df, title):
         start_y = pdf.get_y()
         
         for i, col in enumerate(cols):
-            text = str(row.get(col, ""))
-            if text == "nan" or text == "None": text = ""
+            text = formatted_texts[i]
             
             if fill_row: 
                 pdf.set_fill_color(248, 248, 248)
             else: 
                 pdf.set_fill_color(255, 255, 255)
                 
+            # කොටුව අඳිනවා
             pdf.rect(start_x, start_y, widths[i], row_height, style='DF')
             
-            pdf.set_xy(start_x, start_y)
+            # අකුරු ටික මැද්දට වෙන්න ලස්සනට දානවා (Y අක්ෂයෙන් පොඩි padding එකක් දෙනවා)
+            pdf.set_xy(start_x, start_y + (line_height * 0.2))
             align = "C" if widths[i] < 25 else "L"
             
             pdf.multi_cell(widths[i], line_height, text, border=0, align=align)
@@ -428,7 +457,36 @@ df_removal = pd.DataFrame(removal_data) if removal_data else pd.DataFrame()
 
 # DASHBOARD TAB
 with tab_dash:
-    st.subheader("Project Overview")
+    col_dash_title, col_dash_logo = st.columns([4, 1])
+    
+    with col_dash_title:
+        st.subheader("Project Overview")
+        
+    with col_dash_logo:
+        logo_base64 = get_base64_image("logo.png")
+        if logo_base64:
+            st.markdown(
+                f"""
+                <style>
+                @keyframes spin3D {{
+                    from {{ transform: perspective(1000px) rotateY(0deg); }}
+                    to {{ transform: perspective(1000px) rotateY(360deg); }}
+                }}
+                .animated-logo-3d {{
+                    display: block;
+                    margin-left: auto;
+                    margin-right: 0;
+                    width: 140px;
+                    animation: spin3D 6s linear infinite;
+                    transform-style: preserve-3d;
+                    margin-top: -10px;
+                }}
+                </style>
+                <img src="data:image/png;base64,{logo_base64}" class="animated-logo-3d">
+                """,
+                unsafe_allow_html=True
+            )
+
     if not df_main.empty:
         total_sites = df_main['Site ID'].nunique()
         total_items = len(df_main)
