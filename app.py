@@ -15,11 +15,9 @@ import math
 # ==========================================
 st.set_page_config(page_title="Mobitel Material Tracker", layout="wide", page_icon="📡")
 
-# ලංකාවේ වෙලාව ලබා ගැනීමේ ශ්‍රිතය (Sri Lanka Time: UTC + 5:30)
 def get_sl_time():
     return datetime.utcnow() + timedelta(hours=5, minutes=30)
 
-# පින්තූර Base64 වලට හැරවීමේ ශ්‍රිතය (Animation සඳහා)
 def get_base64_image(image_path):
     try:
         with open(image_path, "rb") as img_file:
@@ -27,7 +25,6 @@ def get_base64_image(image_path):
     except FileNotFoundError:
         return ""
 
-# --- BACKGROUND IMAGE FUNCTION ---
 def set_bg_hack(main_bg):
     main_bg_ext = "jpg"
     try:
@@ -74,9 +71,7 @@ def set_bg_hack(main_bg):
         pass 
 
 set_bg_hack("bg.jpg")
-# ---------------------------------
 
-# Ensure Backup Directories Exist
 BACKUP_DIR = "Delivery_Notes_Backup"
 EVIDENCE_DIR = "Evidence_Backup"
 for d in [BACKUP_DIR, EVIDENCE_DIR]:
@@ -181,9 +176,6 @@ if st.sidebar.button("Logout"):
     st.session_state.role = ""
     st.rerun()
 
-# ==========================================
-# DATA FETCHING 
-# ==========================================
 @st.cache_data(ttl=60)
 def fetch_main_data():
     return main_sheet.get_all_records()
@@ -192,9 +184,6 @@ def fetch_main_data():
 def fetch_removal_data():
     return removal_sheet.get_all_records()
 
-# ==========================================
-# HELPER FUNCTIONS (EXCEL & PDF)
-# ==========================================
 def to_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -275,16 +264,20 @@ def generate_delivery_note_pdf(dn_number, date, issued_by, issued_to, mapped_fro
     pdf.cell(95, 5, "Receiver's Signature", align="C", ln=True)
     return bytes(pdf.output())
 
-# අකුරු එළියට පනින්නේ නැති වෙන්න බලෙන් කඩන අලුත් ෆන්ක්ෂන් එක
+# --- අලුත් කරපු Text Formatter එක (හිස් පේළි අයින් කරලා හරියටම කඩනවා) ---
 def format_text_to_fit(pdf_obj, text, cell_width):
     if text == "nan" or text == "None" or not text: return ""
     text = str(text)
+    
+    # අනවශ්‍ය හිස් පේළි සම්පූර්ණයෙන්ම ඉවත් කිරීම
+    clean_lines = [line.strip() for line in text.split('\n') if line.strip()]
+    text = "\n".join(clean_lines)
+    
     lines = []
     for paragraph in text.split('\n'):
         words = paragraph.split(' ')
         current_line = ""
         for word in words:
-            # වචනයක් කොටුවට වඩා දිග නම් අකුරෙන් අකුර බලලා කඩනවා
             if pdf_obj.get_string_width(word) > cell_width:
                 if current_line:
                     lines.append(current_line)
@@ -297,7 +290,6 @@ def format_text_to_fit(pdf_obj, text, cell_width):
                     else:
                         chunk += char
                 current_line = chunk
-            # සාමාන්‍ය වචන පේළියට දානවා
             elif pdf_obj.get_string_width(current_line + (" " if current_line else "") + word) > cell_width:
                 lines.append(current_line)
                 current_line = word
@@ -324,8 +316,6 @@ def generate_table_export_pdf(df, title):
     base_widths = [width_map.get(col, 25) for col in cols]
     total_unscaled_width = sum(base_widths)
     
-    # --- අලුත් කරපු Portrait / Landscape තීරණය කිරීමේ ක්‍රමය ---
-    # කොලම් අඩු නම් Portrait (දිග අතට), වැඩි නම් Landscape (හරහට)
     if total_unscaled_width <= 190:
         orientation = 'P'
         max_page_width = 190
@@ -349,7 +339,6 @@ def generate_table_export_pdf(df, title):
     pdf.cell(0, 8, f"Generated on: {sl_time_str} (SLST)", ln=True, align="C")
     pdf.ln(5)
     
-    # Scaling - පිටුවට ගැලපෙන විදිහට ඔටෝ සයිස් කිරීම
     scale_factor = 1.0
     if total_unscaled_width > max_page_width:
         scale_factor = max_page_width / total_unscaled_width
@@ -358,13 +347,11 @@ def generate_table_export_pdf(df, title):
     total_table_width = sum(widths)
     
     left_margin = (page_total_width - total_table_width) / 2
-    if left_margin < 5: 
-        left_margin = 5 
+    if left_margin < 5: left_margin = 5 
         
     pdf.set_left_margin(left_margin)
     pdf.set_x(left_margin)
     
-    # අකුරු සයිස් තීරණය කිරීම
     header_font_size = max(6.0, 9.0 * scale_factor)
     data_font_size = max(5.5, 8.0 * scale_factor)
     line_height = max(4.0, 5.0 * scale_factor)
@@ -383,14 +370,12 @@ def generate_table_export_pdf(df, title):
     for idx, row in df.iterrows():
         fill_row = True if idx % 2 == 0 else False
         
-        # දත්ත ටික අරගෙන Formatted Text එකයි Max Lines ගාණයි හොයාගන්නවා
         formatted_texts = []
         max_lines = 1
         for i, col in enumerate(cols):
             raw_text = str(row.get(col, ""))
-            safe_w = widths[i] - 1  # 1mm padding
+            safe_w = widths[i] - 1.5 
             
-            # අපේ අලුත් Function එකෙන් text එක ලස්සනට කඩලා ගන්නවා
             f_text = format_text_to_fit(pdf, raw_text, safe_w)
             formatted_texts.append(f_text)
             
@@ -398,9 +383,17 @@ def generate_table_export_pdf(df, title):
             if num_lines > max_lines:
                 max_lines = num_lines
                 
+        # ආරක්ෂිත සීමාව (Row එක පිටුවට වඩා ලොකු වීම වැළැක්වීම)
+        max_allowed_lines = int((page_height - 40) / line_height)
+        if max_lines > max_allowed_lines:
+            max_lines = max_allowed_lines
+            for i in range(len(formatted_texts)):
+                f_lines = formatted_texts[i].split('\n')
+                if len(f_lines) > max_allowed_lines:
+                    formatted_texts[i] = "\n".join(f_lines[:max_allowed_lines-1]) + "\n..."
+                    
         row_height = max_lines * line_height
         
-        # පිටුව ඉවර වේගෙන එයි නම් අලුත් පිටුවක් ගන්නවා
         if pdf.get_y() + row_height > page_height - 15:
             pdf.add_page(orientation=orientation)
             pdf.set_x(left_margin) 
@@ -424,14 +417,16 @@ def generate_table_export_pdf(df, title):
             else: 
                 pdf.set_fill_color(255, 255, 255)
                 
-            # කොටුව අඳිනවා
             pdf.rect(start_x, start_y, widths[i], row_height, style='DF')
             
-            # අකුරු ටික මැද්දට වෙන්න ලස්සනට දානවා (Y අක්ෂයෙන් පොඩි padding එකක් දෙනවා)
-            pdf.set_xy(start_x, start_y + (line_height * 0.2))
             align = "C" if widths[i] < 25 else "L"
             
-            pdf.multi_cell(widths[i], line_height, text, border=0, align=align)
+            # --- අලුත් කරපු Line-by-line drawing ක්‍රමය (කැපීම සහ පැනීම වළක්වයි) ---
+            lines = text.split('\n')
+            for j, line in enumerate(lines):
+                pdf.set_xy(start_x, start_y + (line_height * 0.2) + (j * line_height))
+                pdf.cell(widths[i], line_height, line, align=align, border=0)
+            # ------------------------------------------------------------------------
             
             start_x += widths[i]
             
